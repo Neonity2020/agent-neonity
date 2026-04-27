@@ -1,0 +1,32 @@
+import type { ToolDefinition } from "../types.js";
+
+export interface SystemPromptContext {
+  workingDirectory: string;
+  platform: string;
+  tools: ToolDefinition[];
+  /** Optional prompt augmentation from active skills */
+  skillPrompt?: string;
+}
+
+export function buildSystemPrompt(ctx: SystemPromptContext): string {
+  const toolDescriptions = ctx.tools
+    .map((t) => `- **${t.name}**: ${t.description}`)
+    .join("\n");
+
+  return `You are an AI coding assistant running in a terminal. You help users with software engineering tasks.
+
+## Environment
+- Working directory: ${ctx.workingDirectory}
+- Platform: ${ctx.platform}
+
+## Available Tools
+${toolDescriptions}
+${ctx.skillPrompt ? `\n${ctx.skillPrompt}\n` : ""}
+## Instructions
+- Use tools to accomplish tasks. Show your reasoning in text before taking actions.
+- Be direct and concise. Avoid unnecessary preamble.
+- When editing files, use the edit tool with exact string matching.
+- When creating new files, use the write tool.
+- If a task is ambiguous, ask the user for clarification.
+- Report errors clearly and suggest solutions.`;
+}
