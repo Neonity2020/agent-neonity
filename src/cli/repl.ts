@@ -25,9 +25,11 @@ const SLASH_COMMANDS = [
   "/delsession",
   "/skills",
   "/skill",
+  "/memory",
   "/router",
   "/router-reset",
   "/cost",
+  "/context",
 ];
 
 export async function startRepl(agent: Agent): Promise<void> {
@@ -302,6 +304,121 @@ async function handleCommand(
       return true;
     }
 
+    case "/context": {
+      const est = agent.getContextStatus();
+      const pct = ((est.totalTokens / est.contextWindow) * 100).toFixed(1);
+      const bar = est.isOverBudget
+        ? chalk.red(`${pct}%`)
+        : parseFloat(pct) > 75
+          ? chalk.yellow(`${pct}%`)
+          : chalk.green(`${pct}%`);
+      console.log(chalk.bold("\nContext Window:"));
+      console.log(`  Window:    ${est.contextWindow.toLocaleString()} tokens`);
+      console.log(`  Reserved:  ${est.reservedForOutput.toLocaleString()} tokens (output)`);
+      console.log(`  System:    ${est.systemPromptTokens.toLocaleString()} tokens`);
+      console.log(`  Tools:     ${est.toolDefinitionTokens.toLocaleString()} tokens`);
+      console.log(`  Messages:  ${est.messageTokens.toLocaleString()} tokens`);
+      console.log(`  Total:     ${est.totalTokens.toLocaleString()} tokens (${bar})`);
+      if (est.isOverBudget) {
+        console.log(chalk.yellow("  ⚠ Over budget — context will be managed on next turn."));
+      }
+      console.log("");
+      return true;
+    }
+
+    case "/memory": {
+      const memoryManager = agent.getMemoryManager();
+      if (!memoryManager) {
+        console.log(chalk.dim("Memory system is not available."));
+        return true;
+      }
+
+      // Parse memory subcommand
+      const memParts = arg.split(/\s+/);
+      const memCmd = memParts[0]?.toLowerCase();
+
+      if (!memCmd || memCmd === "list" || memCmd === "ls") {
+        // List all memories
+        const entries = memoryManager.getAll();
+        if (entries.length === 0) {
+          console.log(chalk.dim("No memories stored. Use the 'memory' tool to add memories."));
+        } else {
+          console.log(chalk.bold(`\nMemories (${entries.length}):`));
+          for (const entry of entries) {
+            const icon = entry.confidence > 0.7 ? chalk.green("●") : chalk.yellow("○");
+            console.log(`  ${icon} [${entry.category}] ${chalk.dim(entry.id)}`);
+            console.log(`    ${entry.content.slice(0, 80)}${entry.content.length > 80 ? "..." : ""}`);
+          }
+        }
+        console.log("");
+        return true;
+      }
+
+      if (memCmd === "stats") {
+        const stats = memoryManager.getStats();
+        console.log(chalk.bold("\nMemory Statistics:"));
+        console.log(`  Total: ${stats.totalEntries}`);
+        console.log(`  - project: ${stats.byCategory.project}`);
+        console.log(`  - preference: ${stats.byCategory.preference}`);
+        console.log(`  - knowledge: ${stats.byCategory.knowledge}`);
+        console.log(`  - context: ${stats.byCategory.context}`);
+        console.log(`  - pattern: ${stats.byCategory.pattern}`);
+        console.log(`  Last updated: ${stats.lastUpdated || "never"}`);
+        console.log("");
+        return true;
+      }
+
+      if (memCmd === "add") {
+        // /memory add <category> <content>
+        const category = memParts[1] as import("../memory/memory.js").MemoryCategory;
+        const content = memParts.slice(2).join(" ");
+        if (!category || !content) {
+          console.log(chalk.yellow("Usage: /memory add <category> <content>"));
+          console.log(chalk.dim("Categories: project, preference, knowledge, context, pattern"));
+          return true;
+        }
+        const entry = await memoryManager.add(content, category);
+        console.log(chalk.green(`✓ Memory added: ${entry.id}`));
+        return true;
+      }
+
+      if (memCmd === "search" || memCmd === "find") {
+        const query = memParts.slice(1).join(" ");
+        if (!query) {
+          console.log(chalk.yellow("Usage: /memory search <query>"));
+          return true;
+        }
+        const results = memoryManager.search(query);
+        if (results.length === 0) {
+          console.log(chalk.dim("No memories found."));
+        } else {
+          console.log(chalk.bold(`\nFound ${results.length} memory(ies):\n`));
+          for (const entry of results) {
+            console.log(`  [${entry.category}] ${entry.content}`);
+            console.log("");
+          }
+        }
+        return true;
+      }
+
+      if (memCmd === "clear") {
+        // This would need a separate delete all method
+        console.log(chalk.dim("Use /memory search + tool to delete individual memories."));
+        return true;
+      }
+
+      // Show help for memory commands
+      console.log(chalk.bold("\nMemory Commands:"));
+      console.log(chalk.dim("  /memory              List all memories"));
+      console.log(chalk.dim("  /memory list         List all memories"));
+      console.log(chalk.dim("  /memory stats        Show memory statistics"));
+      console.log(chalk.dim("  /memory add <cat> <content>  Add a memory"));
+      console.log(chalk.dim("  /memory search <query>      Search memories"));
+      console.log(chalk.dim("\nCategories: project, preference, knowledge, context, pattern"));
+      console.log(chalk.dim("\nThe agent can also use the 'memory' tool to manage memories.\n"));
+      return true;
+    }
+
     default:
       return false;
   }
@@ -320,9 +437,11 @@ function printHelp(): void {
       chalk.dim("  /delsession <n> Delete a session\n") +
       chalk.dim("  /skills         List available skills\n") +
       chalk.dim("  /skill <name>   Toggle a skill on/off\n") +
+      chalk.dim("  /memory         List/search memories\n") +
       chalk.dim("  /router         Show router status (circuits, latency, budget)\n") +
       chalk.dim("  /router-reset   Reset circuit breakers (optional: <name>)\n") +
       chalk.dim("  /cost           Show cumulative token usage & cost\n") +
+      chalk.dim("  /context        Show context window usage\n") +
       "\n" +
       chalk.dim("Anything else is sent to the AI agent.\n")
   );

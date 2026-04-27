@@ -22,33 +22,48 @@ export default function Chapter() {
           Architecture at a Glance
         </h2>
         <pre className="text-xs text-slate-400 bg-slate-900 p-4 rounded-lg overflow-x-auto leading-relaxed">
-{`┌──────────────────────────────────────────────────┐
-│                    index.ts                       │
-│         (entry point, wiring everything)          │
-└────────┬──────────────────────────────┬──────────┘
-         │                              │
-    ┌────▼─────┐                  ┌─────▼──────┐
-    │  config   │                  │    CLI     │
-    │  .env →   │                  │  repl.ts   │
-    │  AppConfig│                  │  stream.ts │
-    └────┬─────┘                  │  display.ts │
-         │                              │
-    ┌────▼──────────────────────────────▼──────┐
-    │               Agent                       │
-    │         (ReAct loop controller)           │
-    │   history[] → reactLoop() → tool calls    │
-    └────┬──────────────────────────┬──────────┘
-         │                          │
-    ┌────▼─────┐              ┌─────▼──────┐
-    │ Provider  │              │   Tools    │
-    │ Factory   │              │ Registry   │
-    │ ┌───────┐ │              │ ┌────────┐ │
-    │ │Anthrop│ │              │ │ bash   │ │
-    │ │OpenAI │ │              │ │ read   │ │
-    │ │Gemini │ │              │ │ write  │ │
-    │ │DeepSk │ │              │ │ edit   │ │
-    │ └───────┘ │              │ └────────┘ │
-    └──────────┘              └────────────┘`}
+{`┌──────────────────────────────────────────────────────┐
+│                      index.ts                         │
+│           (entry point, wiring everything)            │
+└──────────┬───────────────────────────────┬───────────┘
+           │                               │
+      ┌────▼─────┐                   ┌─────▼──────┐
+      │  config   │                   │    CLI     │
+      │  .env →   │                   │  repl.ts   │
+      │  Unified  │                   │  stream.ts │
+      │ AppConfig │                   │  display.ts│
+      └────┬─────┘                   │ markdown.ts│
+           │                         │ session.ts │
+           │                         └────────────┘
+           │
+      ┌────▼──────────────────────────────────────┐
+      │                Agent                        │
+      │          (ReAct loop controller)            │
+      │   history[] → reactLoop() → tool calls      │
+      │   ContextManager (truncation/summarization) │
+      └────┬──────────────────────────┬────────────┘
+           │                          │
+      ┌────▼─────┐              ┌─────▼──────┐
+      │ Provider  │              │   Tools    │
+      │ ┌───────┐ │              │ Registry   │
+      │ │ Router│ │              │ ┌────────┐ │
+      │ │ ┌───────┐ │            │ │ bash   │ │
+      │ │ │Tiered │ │            │ │ read   │ │
+      │ │ │Routes │ │            │ │ write  │ │
+      │ │ └───────┘ │            │ │ edit   │ │
+      │ │Anthropic │ │            │ └────────┘ │
+      │ │OpenAI    │ │            └────────────┘
+      │ │Gemini    │ │
+      │ │DeepSeek  │ │       ┌────────────────┐
+      │ └──────────┘ │       │    Skills      │
+      └──────────────┘       │  Registry      │
+                              │ ┌────────────┐ │
+                              │ │code-reviewer│ │
+                              │ │test-writer │ │
+                              │ │git-committer│ │
+                              │ │doc-writer  │ │
+                              │ └────────────┘ │
+                              └────────────────┘`}
         </pre>
       </section>
 
@@ -115,9 +130,22 @@ export default function Chapter() {
             real-time text output.
           </li>
           <li className="leading-relaxed">
-            <strong>DeepSeek = OpenAI.</strong> DeepSeek&apos;s API is OpenAI-compatible,
-            so the DeepSeek configuration reuses the OpenAI provider class—just
-            with a different baseURL and model name.
+            <strong>Smart Router with cost tiers.</strong> In router mode,
+            queries are analyzed for complexity and routed to cheap, standard,
+            or premium providers—with circuit breakers, exponential backoff, and
+            cross-tier fallback for resilience.
+          </li>
+          <li className="leading-relaxed">
+            <strong>Extensible skill system.</strong> Skills are pure
+            system-prompt augmentations that can be toggled at runtime. Each
+            skill injects specialized instructions, and optionally new tools,
+            into the agent&apos;s context.
+          </li>
+          <li className="leading-relaxed">
+            <strong>Context window management.</strong> Long conversations are
+            handled with automatic truncation or LLM-powered summarization,
+            keeping the agent within the model&apos;s token limits without losing
+            critical context.
           </li>
         </ol>
       </section>

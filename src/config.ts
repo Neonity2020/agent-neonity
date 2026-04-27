@@ -1,8 +1,9 @@
 import "dotenv/config.js";
 import type { ProviderConfig } from "./types.js";
 import type { CostTier } from "./provider/router.js";
+import type { ContextManagerConfig, ContextStrategy } from "./agent/context-manager.js";
 
-export type ProviderType = "anthropic" | "openai" | "gemini" | "deepseek";
+export type ProviderType = "anthropic" | "openai" | "gemini" | "deepseek" | "minimax";
 
 // ── Single-provider config (legacy / non-router mode) ──────
 
@@ -48,8 +49,8 @@ export interface RouterAppConfig {
 }
 
 export type UnifiedAppConfig =
-  | { mode: "single"; config: AppConfig }
-  | { mode: "router"; config: RouterAppConfig };
+  | { mode: "single"; config: AppConfig; contextManager?: Partial<ContextManagerConfig> }
+  | { mode: "router"; config: RouterAppConfig; contextManager?: Partial<ContextManagerConfig> };
 
 // ── Defaults ────────────────────────────────────────────────
 
@@ -58,6 +59,7 @@ const DEFAULT_MODELS: Record<ProviderType, string> = {
   openai: "gpt-4.1",
   gemini: "gemini-2.5-flash",
   deepseek: "deepseek-v4-pro",
+  minimax: "MiniMax-M2.7",
 };
 
 const CHEAP_DEFAULT_MODELS: Record<ProviderType, string> = {
@@ -65,6 +67,7 @@ const CHEAP_DEFAULT_MODELS: Record<ProviderType, string> = {
   openai: "gpt-4.1-nano",
   gemini: "gemini-2.5-flash",
   deepseek: "deepseek-v4-pro",
+  minimax: "MiniMax-M2.7",
 };
 
 const PREMIUM_DEFAULT_MODELS: Record<ProviderType, string> = {
@@ -72,25 +75,27 @@ const PREMIUM_DEFAULT_MODELS: Record<ProviderType, string> = {
   openai: "gpt-4.1",
   gemini: "gemini-2.5-pro",
   deepseek: "deepseek-v4-pro",
+  minimax: "MiniMax-M2.7",
 };
 
-const ALL_PROVIDERS: ProviderType[] = ["anthropic", "openai", "gemini", "deepseek"];
+const ALL_PROVIDERS: ProviderType[] = ["anthropic", "openai", "gemini", "deepseek", "minimax"];
 
 // ── Load ────────────────────────────────────────────────────
 
 export function loadConfig(): UnifiedAppConfig {
   const routerMode = process.env.ROUTER_MODE === "true";
+  const contextManager = parseContextConfig();
 
   if (routerMode) {
     try {
-      return { mode: "router", config: loadRouterConfig() };
+      return { mode: "router", config: loadRouterConfig(), contextManager };
     } catch {
       process.stderr.write(
         "[neonity] Router mode misconfigured, falling back to single-provider mode.\n"
       );
     }
   }
-  return { mode: "single", config: loadSingleConfig() };
+  return { mode: "single", config: loadSingleConfig(), contextManager };
 }
 
 // ── Single-provider mode ────────────────────────────────────
@@ -220,6 +225,9 @@ function buildProviderConfig(
     ...(providerType === "deepseek" && {
       baseURL: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com",
     }),
+    ...(providerType === "minimax" && {
+      baseURL: process.env.MINIMAX_BASE_URL ?? "https://api.minimaxi.com/anthropic",
+    }),
   };
 }
 
@@ -241,6 +249,39 @@ function getApiKey(providerType: ProviderType): string | undefined {
       return process.env.GEMINI_API_KEY;
     case "deepseek":
       return process.env.DEEPSEEK_API_KEY;
+    case "minimax":
+      return process.env.MINIMAX_API_KEY;
   }
+}
+
+// ── Context management config ────────────────────────────────
+
+function parseContextConfig(): Partial<ContextManagerConfig> | undefined {
+  const hasConfig =
+    process.env.CONTEXT_STRATEGY ||
+    process.env.CONTEXT_RESERVE_RATIO ||
+    process.env.CONTEXT_PRESERVE_GROUPS ||
+    process.env.CONTEXT_WINDOW_SIZE ||
+    process.env.CONTEXT_SUMMARIZATION_MODEL;
+
+  if (!hasConfig) return undefined;
+
+  return {
+    ...(process.env.CONTEXT_STRATEGY && {
+      strategy: process.env.CONTEXT_STRATEGY as ContextStrategy,
+    }),
+    ...(process.env.CONTEXT_RESERVE_RATIO && {
+      reserveRatio: parseFloat(process.env.CONTEXT_RESERVE_RATIO),
+    }),
+    ...(process.env.CONTEXT_PRESERVE_GROUPS && {
+      preserveRecentGroups: parseInt(process.env.CONTEXT_PRESERVE_GROUPS, 10),
+    }),
+    ...(process.env.CONTEXT_WINDOW_SIZE && {
+      contextWindowOverride: parseInt(process.env.CONTEXT_WINDOW_SIZE, 10),
+    }),
+    ...(process.env.CONTEXT_SUMMARIZATION_MODEL && {
+      summarizationModel: process.env.CONTEXT_SUMMARIZATION_MODEL,
+    }),
+  };
 }
 

@@ -76,6 +76,27 @@ export const chapters: ChapterMeta[] = [
       "Markdown rendering, session persistence, command history, and tab completion.",
     order: 10,
   },
+  {
+    slug: "11-skills",
+    title: "Skill System",
+    description:
+      "Runtime-togglable skill modules that augment the agent's system prompt and tool registry.",
+    order: 11,
+  },
+  {
+    slug: "12-router",
+    title: "Smart Router",
+    description:
+      "Multi-provider routing with cost tiers, circuit breakers, complexity analysis, and cross-tier fallback.",
+    order: 12,
+  },
+  {
+    slug: "13-context",
+    title: "Context Window Management",
+    description:
+      "Handling long conversations with truncation and summarization strategies to stay within LLM context limits.",
+    order: 13,
+  },
 ];
 
 export function getChapter(slug: string): ChapterMeta | undefined {

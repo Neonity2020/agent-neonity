@@ -6,17 +6,26 @@ const heroCode = `#!/usr/bin/env node
 import { loadConfig } from "./config.js";
 import { createProvider } from "./provider/factory.js";
 import { Agent } from "./agent/agent.js";
+import { ToolRegistry } from "./tool/tool.js";
+import { SkillRegistry } from "./skill/skill.js";
 import { startRepl } from "./cli/repl.js";
 
 async function main() {
-  const config = loadConfig();
-  const provider = createProvider(
-    config.providerType,
-    config.provider
+  const unified = loadConfig();
+  const provider = unified.mode === "router"
+    ? createRouter(unified.config)
+    : createProvider(
+        unified.config.providerType,
+        unified.config.provider
+      );
+  const skills = new SkillRegistry();
+  // Register built-in skills...
+  const agent = new Agent(
+    unified, provider, registry, skills,
+    workingDirectory, unified.contextManager
   );
-  const agent = new Agent(config, provider, registry);
   console.log(
-    \`neonity v0.1.0 | provider: \${provider.name}\`
+    \`neonity v0.1.0 | mode: \${unified.mode}\`
   );
   await startRepl(agent);
 }
@@ -68,7 +77,7 @@ export default function HomePage() {
         <h2 className="text-xl font-bold text-white mb-6">
           What You&apos;ll Build
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[
             {
               emoji: "🔌",
@@ -83,12 +92,22 @@ export default function HomePage() {
             {
               emoji: "🔄",
               title: "ReAct Loop",
-              desc: "Reasoning + Acting agent pattern with configurable iteration limits and error handling.",
+              desc: "Reasoning + Acting agent pattern with configurable iteration limits, error handling, and context management.",
             },
             {
               emoji: "🖥️",
               title: "Terminal CLI",
-              desc: "Readline-based REPL with streaming output, markdown rendering, and session persistence.",
+              desc: "Readline-based REPL with streaming output, markdown rendering, session persistence, and tab completion.",
+            },
+            {
+              emoji: "🧠",
+              title: "Skill System",
+              desc: "Runtime-togglable skill modules that augment the agent's system prompt and tool registry. Persisted across sessions.",
+            },
+            {
+              emoji: "⚡",
+              title: "Smart Router",
+              desc: "Multi-provider routing with cost tiers (cheap/standard/premium), circuit breakers, and cross-tier fallback.",
             },
           ].map((f) => (
             <div

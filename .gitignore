@@ -4,3 +4,5 @@ dist/
 *.tsbuildinfo
 .DS_Store
 neonity.memory-card.json
+.neonity/
+hn-tops/

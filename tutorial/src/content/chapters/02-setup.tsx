@@ -149,7 +149,8 @@ DEEPSEEK_API_KEY=
         <pre className="text-xs text-slate-400 bg-slate-900 p-4 rounded-lg overflow-x-auto leading-relaxed">
 {`src/
   agent/
-    agent.ts              # ReAct loop
+    agent.ts              # ReAct loop with context management
+    context-manager.ts    # Context window truncation & summarization
     system-prompt.ts      # System prompt builder
   cli/
     display.ts            # Output formatting
@@ -159,17 +160,26 @@ DEEPSEEK_API_KEY=
     stream.ts             # Streaming callbacks
   provider/
     anthropic.ts          # Anthropic adapter
-    factory.ts            # Provider factory
+    deepseek-provider.ts  # Native DeepSeek adapter
+    factory.ts            # Provider factory + router builder
     gemini.ts             # Gemini adapter
-    openai-provider.ts    # OpenAI + DeepSeek adapter
+    openai-provider.ts    # OpenAI adapter
     provider.ts           # Type re-exports
+    router.ts             # Smart router: tiers, circuit breakers, monitoring
+  skill/
+    skill.ts              # SkillRegistry
+    builtin/
+      code-reviewer.ts    # Code review skill
+      doc-writer.ts       # Documentation writing skill
+      git-committer.ts    # Git conventional commits skill
+      test-writer.ts      # Test writing skill
   tool/
     bash-tool.ts          # Shell command execution
     edit-tool.ts          # Exact string replacement
     read-tool.ts          # File reading
     tool.ts               # ToolRegistry
     write-tool.ts         # File writing
-  config.ts               # Configuration loader
+  config.ts               # Unified config loader (single + router modes)
   index.ts                # Entry point
   types.ts                # Core type definitions`}
         </pre>

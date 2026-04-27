@@ -6,6 +6,8 @@ export interface SystemPromptContext {
   tools: ToolDefinition[];
   /** Optional prompt augmentation from active skills */
   skillPrompt?: string;
+  /** Optional long-term memory to inject */
+  memoryPrompt?: string;
 }
 
 export function buildSystemPrompt(ctx: SystemPromptContext): string {
@@ -22,6 +24,7 @@ export function buildSystemPrompt(ctx: SystemPromptContext): string {
 ## Available Tools
 ${toolDescriptions}
 ${ctx.skillPrompt ? `\n${ctx.skillPrompt}\n` : ""}
+${ctx.memoryPrompt ? `\n${ctx.memoryPrompt}\n` : ""}
 ## Instructions
 - Use tools to accomplish tasks. Show your reasoning in text before taking actions.
 - Be direct and concise. Avoid unnecessary preamble.

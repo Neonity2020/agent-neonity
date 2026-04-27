@@ -10,14 +10,17 @@ import { BashTool } from "./tool/bash-tool.js";
 import { ReadTool } from "./tool/read-tool.js";
 import { WriteTool } from "./tool/write-tool.js";
 import { EditTool } from "./tool/edit-tool.js";
+import { createWebSearchTool } from "./tool/index.js";
 import { buildSystemPrompt } from "./agent/system-prompt.js";
 import { startRepl } from "./cli/repl.js";
+import { MemoryTool } from "./memory/memory-tool.js";
 
 // Built-in skills
 import { codeReviewerSkill } from "./skill/builtin/code-reviewer.js";
 import { testWriterSkill } from "./skill/builtin/test-writer.js";
 import { gitCommitterSkill } from "./skill/builtin/git-committer.js";
 import { docWriterSkill } from "./skill/builtin/doc-writer.js";
+import { hnTopSkill } from "./skill/builtin/hn-top.js";
 
 async function main() {
   const unified = loadConfig();
@@ -47,12 +50,17 @@ async function main() {
   toolRegistry.register(new WriteTool());
   toolRegistry.register(new EditTool());
 
+  // Optional web search tool (configured via WEB_SEARCH_PROVIDER env var)
+  const webSearchTool = createWebSearchTool();
+  toolRegistry.register(webSearchTool);
+
   // --- Skill registry ---
   const skillRegistry = new SkillRegistry();
   skillRegistry.register(codeReviewerSkill);
   skillRegistry.register(testWriterSkill);
   skillRegistry.register(gitCommitterSkill);
   skillRegistry.register(docWriterSkill);
+  skillRegistry.register(hnTopSkill);
   skillRegistry.loadState();
 
   const maxIterations = unified.config.maxIterations;
@@ -96,8 +104,15 @@ async function main() {
     provider,
     toolRegistry,
     skillRegistry,
-    workingDirectory
+    workingDirectory,
+    unified.contextManager,
   );
+
+  // Register memory tool after agent initialization (it needs MemoryManager from agent)
+  const memoryManager = agent.getMemoryManager();
+  if (memoryManager) {
+    toolRegistry.register(new MemoryTool(memoryManager));
+  }
 
   console.log(
     `Skills: ${skillRegistry.list().filter((s) => s.active).length} active / ${skillRegistry.list().length} available`

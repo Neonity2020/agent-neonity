@@ -33,16 +33,37 @@ export default function Chapter() {
   private history: Message[] = [];
   private provider: Provider;
   private toolRegistry: ToolRegistry;
+  private skillRegistry: SkillRegistry;
   private config: AgentConfig;
+  private workingDirectory: string;
+  private contextManager: ContextManager;
 
   constructor(
     config: AgentConfig,
     provider: Provider,
-    toolRegistry: ToolRegistry
+    toolRegistry: ToolRegistry,
+    skillRegistry: SkillRegistry,
+    workingDirectory: string,
+    contextManagerConfig?: Partial<ContextManagerConfig>,
   ) {
     this.config = config;
     this.provider = provider;
     this.toolRegistry = toolRegistry;
+    this.skillRegistry = skillRegistry;
+    this.workingDirectory = workingDirectory;
+    this.contextManager = new ContextManager(
+      contextManagerConfig
+    );
+  }
+
+  /** Get the SkillRegistry (for REPL to manage skills). */
+  getSkillRegistry(): SkillRegistry {
+    return this.skillRegistry;
+  }
+
+  /** Get the Provider (for REPL to inspect router stats). */
+  getProvider(): Provider {
+    return this.provider;
   }
 
   /** Get a copy of the conversation history. */
@@ -71,6 +92,21 @@ export default function Chapter() {
 
     await this.reactLoop(callbacks);
   }
+
+  /** Build the effective system prompt including active skills. */
+  private buildEffectivePrompt(): string {
+    const allTools = this.skillRegistry.getToolDefinitions(
+      this.toolRegistry.getDefinitions()
+    );
+    const skillPrompt = this.skillRegistry.getActivePrompt();
+
+    return buildSystemPrompt({
+      workingDirectory: this.workingDirectory,
+      platform: process.platform,
+      tools: allTools,
+      skillPrompt: skillPrompt || undefined,
+    });
+  }
 }`}
         />
         <p className="text-slate-300 leading-relaxed mt-4">
@@ -93,11 +129,28 @@ export default function Chapter() {
   callbacks?: StreamCallbacks
 ): Promise<void> {
   for (let i = 0; i < this.config.maxIterations; i++) {
+    const systemPrompt = this.buildEffectivePrompt();
+    const allTools = this.skillRegistry.getToolDefinitions(
+      this.toolRegistry.getDefinitions()
+    );
+
+    // Context window management
+    const managed = await this.contextManager.manage(
+      this.history,
+      systemPrompt,
+      allTools,
+      this.config.provider.model,
+      this.provider,
+    );
+    if (managed.wasManaged) {
+      this.history = managed.messages;
+    }
+
     const response = await this.provider.chat(
       this.history,
-      this.toolRegistry.getDefinitions(),
+      allTools,
       callbacks,
-      this.config.systemPrompt
+      systemPrompt
     );
 
     // Append assistant response to history
@@ -127,10 +180,15 @@ export default function Chapter() {
         if (block.type === "tool_use") {
           callbacks?.onToolUseStart?.(block.id, block.name);
 
-          const result = await this.toolRegistry.execute(
-            block.name,
-            block.input
-          );
+          // Try skill tools first, then base registry
+          let result = await this.skillRegistry
+            .executeSkillTool(block.name, block.input);
+          if (result === null) {
+            result = await this.toolRegistry.execute(
+              block.name,
+              block.input
+            );
+          }
 
           toolResults.push({
             type: "tool_result",

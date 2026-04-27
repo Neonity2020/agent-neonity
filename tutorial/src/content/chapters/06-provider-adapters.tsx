@@ -204,6 +204,71 @@ export default function Chapter() {
         />
       </section>
 
+      {/* DeepSeek */}
+      <section>
+        <h2 className="text-xl font-bold text-white mb-3">
+          4. DeepSeek Native Provider
+        </h2>
+        <p className="text-slate-300 leading-relaxed mb-4">
+          DeepSeek now has its own native adapter. While DeepSeek&apos;s API is
+          OpenAI-compatible, a dedicated adapter enables proper handling of{" "}
+          <code className="bg-slate-800 px-1.5 py-0.5 rounded text-sm text-cyan-400">reasoning_content</code>{" "}
+          — chain-of-thought tokens emitted by DeepSeek R1/V3 &quot;thinking&quot; models.
+        </p>
+        <CodeBlock
+          filename="src/provider/deepseek-provider.ts (excerpt)"
+          code={`export class DeepSeekProvider implements Provider {
+  readonly name = "deepseek";
+  private client: OpenAI;
+  private model: string;
+
+  constructor(config: ProviderConfig) {
+    this.client = new OpenAI({
+      apiKey: config.apiKey,
+      baseURL: config.baseURL ?? "https://api.deepseek.com",
+    });
+    this.model = config.model;
+  }
+
+  async chat(
+    messages: Message[],
+    tools: ToolDefinition[],
+    callbacks?: StreamCallbacks,
+    systemPrompt?: string
+  ): Promise<ProviderResponse> {
+    // ... same structure as OpenAI, but with reasoning_content
+    // handling in the stream processing loop
+
+    for await (const chunk of stream) {
+      const delta = chunk.choices?.[0]?.delta;
+
+      // Handle reasoning_content (DeepSeek thinking)
+      if (delta?.reasoning_content) {
+        callbacks?.onReasoningDelta?.(
+          delta.reasoning_content
+        );
+      }
+
+      // Handle text content
+      if (delta?.content) {
+        callbacks?.onTextDelta?.(delta.content);
+      }
+
+      // Handle tool_calls (accumulated JSON chunks)
+      if (delta?.tool_calls) {
+        for (const tc of delta.tool_calls) {
+          callbacks?.onToolUseDelta?.(
+            tc.id ?? "",
+            tc.function?.arguments ?? ""
+          );
+        }
+      }
+    }
+  }
+}`}
+        />
+      </section>
+
       {/* Comparison */}
       <section>
         <h2 className="text-xl font-bold text-white mb-3">

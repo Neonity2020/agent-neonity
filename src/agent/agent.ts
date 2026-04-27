@@ -4,10 +4,17 @@ import type {
   Provider,
   StreamCallbacks,
   ToolResultContent,
+  ToolDefinition,
 } from "../types.js";
 import { ToolRegistry } from "../tool/tool.js";
 import { SkillRegistry } from "../skill/skill.js";
 import { buildSystemPrompt } from "./system-prompt.js";
+import {
+  ContextManager,
+  type ContextManagerConfig,
+  type TokenEstimate,
+} from "./context-manager.js";
+import { MemoryManager } from "../memory/memory.js";
 
 export class Agent {
   private history: Message[] = [];
@@ -16,19 +23,39 @@ export class Agent {
   private skillRegistry: SkillRegistry;
   private config: AgentConfig;
   private workingDirectory: string;
+  private contextManager: ContextManager;
+  private memoryManager: MemoryManager | null = null;
 
   constructor(
     config: AgentConfig,
     provider: Provider,
     toolRegistry: ToolRegistry,
     skillRegistry: SkillRegistry,
-    workingDirectory: string
+    workingDirectory: string,
+    contextManagerConfig?: Partial<ContextManagerConfig>,
   ) {
     this.config = config;
     this.provider = provider;
     this.toolRegistry = toolRegistry;
     this.skillRegistry = skillRegistry;
     this.workingDirectory = workingDirectory;
+    this.contextManager = new ContextManager(contextManagerConfig);
+    
+    // Initialize memory manager if available
+    this.initMemory();
+  }
+
+  /**
+   * Initialize memory system
+   */
+  private async initMemory(): Promise<void> {
+    try {
+      this.memoryManager = new MemoryManager(this.workingDirectory);
+      await this.memoryManager.initialize();
+    } catch (err) {
+      console.warn("Failed to initialize memory system:", err);
+      this.memoryManager = null;
+    }
   }
 
   /** Get the SkillRegistry (for REPL to manage skills). */
@@ -39,6 +66,11 @@ export class Agent {
   /** Get the Provider (for REPL to inspect router stats). */
   getProvider(): Provider {
     return this.provider;
+  }
+
+  /** Get the MemoryManager (for REPL to manage memories). */
+  getMemoryManager(): MemoryManager | null {
+    return this.memoryManager;
   }
 
   /** Get a copy of the conversation history (for session persistence). */
@@ -68,30 +100,52 @@ export class Agent {
     await this.reactLoop(callbacks);
   }
 
-  /** Build the effective system prompt including active skills. */
+  /** Build the effective system prompt including active skills and memories. */
   private buildEffectivePrompt(): string {
     const allTools = this.skillRegistry.getToolDefinitions(
       this.toolRegistry.getDefinitions()
     );
     const skillPrompt = this.skillRegistry.getActivePrompt();
+    const memoryPrompt = this.memoryManager?.getForSystemPrompt() || "";
 
     return buildSystemPrompt({
       workingDirectory: this.workingDirectory,
       platform: process.platform,
       tools: allTools,
       skillPrompt: skillPrompt || undefined,
+      memoryPrompt: memoryPrompt || undefined,
     });
+  }
+
+  /** Get current context window token estimate. */
+  getContextStatus(systemPrompt?: string, tools?: ToolDefinition[]): TokenEstimate {
+    const sp = systemPrompt ?? this.buildEffectivePrompt();
+    const t = tools ?? this.skillRegistry.getToolDefinitions(this.toolRegistry.getDefinitions());
+    return this.contextManager.estimateTokens(this.history, sp, t, this.config.provider.model);
   }
 
   private async reactLoop(callbacks?: StreamCallbacks): Promise<void> {
     for (let i = 0; i < this.config.maxIterations; i++) {
       const systemPrompt = this.buildEffectivePrompt();
+      const allTools = this.skillRegistry.getToolDefinitions(
+        this.toolRegistry.getDefinitions()
+      );
+
+      // Context window management
+      const managed = await this.contextManager.manage(
+        this.history,
+        systemPrompt,
+        allTools,
+        this.config.provider.model,
+        this.provider,
+      );
+      if (managed.wasManaged) {
+        this.history = managed.messages;
+      }
 
       const response = await this.provider.chat(
         this.history,
-        this.skillRegistry.getToolDefinitions(
-          this.toolRegistry.getDefinitions()
-        ),
+        allTools,
         callbacks,
         systemPrompt
       );

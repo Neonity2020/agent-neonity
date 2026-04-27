@@ -17,25 +17,35 @@ export default function Chapter() {
           code={`#!/usr/bin/env node
 
 import { loadConfig } from "./config.js";
-import { createProvider } from "./provider/factory.js";
+import { createProvider, createRouter } from "./provider/factory.js";
 import { Agent } from "./agent/agent.js";
 import { ToolRegistry } from "./tool/tool.js";
+import { SkillRegistry } from "./skill/skill.js";
 import { BashTool } from "./tool/bash-tool.js";
 import { ReadTool } from "./tool/read-tool.js";
 import { WriteTool } from "./tool/write-tool.js";
 import { EditTool } from "./tool/edit-tool.js";
+import { CodeReviewerSkill } from "./skill/builtin/code-reviewer.js";
+import { TestWriterSkill } from "./skill/builtin/test-writer.js";
+import { GitCommitterSkill } from "./skill/builtin/git-committer.js";
+import { DocWriterSkill } from "./skill/builtin/doc-writer.js";
 import { buildSystemPrompt } from "./agent/system-prompt.js";
 import { startRepl } from "./cli/repl.js";
 
 async function main() {
-  const config = loadConfig();
-  const provider = createProvider(
-    config.providerType,
-    config.provider
-  );
+  const unified = loadConfig();
+
+  const provider = unified.mode === "router"
+    ? createRouter(unified.config)
+    : createProvider(
+        unified.config.providerType,
+        unified.config.provider
+      );
 
   const workingDirectory =
-    config.workingDirectory ?? process.cwd();
+    unified.mode === "single"
+      ? unified.config.workingDirectory ?? process.cwd()
+      : unified.config.workingDirectory ?? process.cwd();
 
   const registry = new ToolRegistry();
   registry.register(new BashTool(workingDirectory));
@@ -43,28 +53,36 @@ async function main() {
   registry.register(new WriteTool());
   registry.register(new EditTool());
 
-  const systemPrompt = buildSystemPrompt({
-    workingDirectory,
-    platform: process.platform,
-    tools: registry.getDefinitions(),
-  });
+  const skills = new SkillRegistry(registry);
+  skills.register(new CodeReviewerSkill());
+  skills.register(new TestWriterSkill());
+  skills.register(new GitCommitterSkill());
+  skills.register(new DocWriterSkill());
+  skills.loadState(); // restore persisted skill state
 
   const agent = new Agent(
-    {
-      provider: config.provider,
-      systemPrompt,
-      maxIterations: config.maxIterations,
-      workingDirectory,
-    },
+    unified.mode === "single"
+      ? {
+          provider: unified.config.provider,
+          maxIterations: unified.config.maxIterations,
+          workingDirectory,
+        }
+      : {
+          provider: {  /* router as provider */ },
+          maxIterations: unified.config.maxIterations,
+          workingDirectory,
+        },
     provider,
-    registry
+    registry,
+    skills,
+    workingDirectory,
+    unified.contextManager,
   );
 
   console.log(
-    \`neonity v0.1.0 | provider: \${provider.name} | \` +
-    \`model: \${config.provider.model}\`
+    \`neonity v0.1.0 | mode: \${unified.mode}\`
   );
-  console.log("Type /exit to quit.\\n");
+  console.log("Type /help for commands.\\n");
 
   await startRepl(agent);
 }

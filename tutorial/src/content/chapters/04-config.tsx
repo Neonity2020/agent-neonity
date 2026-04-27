@@ -17,8 +17,14 @@ export default function Chapter() {
           filename="src/config.ts"
           code={`import "dotenv/config.js";
 import type { ProviderConfig } from "./types.js";
+import type { CostTier } from "./provider/router.js";
+import type { ContextManagerConfig,
+  ContextStrategy } from "./agent/context-manager.js";
 
-export type ProviderType = "anthropic" | "openai" | "gemini" | "deepseek";
+export type ProviderType =
+  "anthropic" | "openai" | "gemini" | "deepseek";
+
+// ── Single-provider config ───────────────────
 
 export interface AppConfig {
   providerType: ProviderType;
@@ -26,6 +32,34 @@ export interface AppConfig {
   maxIterations: number;
   workingDirectory?: string;
 }
+
+// ── Router config ────────────────────────────
+
+export interface TieredProviderConfig {
+  providerType: ProviderType;
+  provider: ProviderConfig;
+  label: string;
+}
+
+export interface RouterAppConfig {
+  tiers: Partial<Record<CostTier, TieredProviderConfig>>;
+  maxIterations: number;
+  workingDirectory?: string;
+  verbose?: boolean;
+  trackLatency?: boolean;
+  trackBudget?: boolean;
+  circuitFailureThreshold?: number;
+  circuitCooldownMs?: number;
+  // ... complexity thresholds
+}
+
+export type UnifiedAppConfig =
+  | { mode: "single";
+      config: AppConfig;
+      contextManager?: Partial<ContextManagerConfig> }
+  | { mode: "router";
+      config: RouterAppConfig;
+      contextManager?: Partial<ContextManagerConfig> };
 
 const DEFAULT_MODELS: Record<ProviderType, string> = {
   anthropic: "claude-sonnet-4-20250514",
@@ -40,11 +74,11 @@ const ALL_PROVIDERS: ProviderType[] = [
         />
 
         <p className="text-slate-300 leading-relaxed mt-4">
-          The <code className="bg-slate-800 px-1.5 py-0.5 rounded text-sm text-cyan-400">ProviderType</code>{" "}
-          literal union ensures compile-time safety—you can never pass an
-          unknown provider name. The{" "}
-          <code className="bg-slate-800 px-1.5 py-0.5 rounded text-sm text-cyan-400">DEFAULT_MODELS</code>{" "}
-          map provides sensible defaults for each provider.
+          The config system now produces a{" "}
+          <code className="bg-slate-800 px-1.5 py-0.5 rounded text-sm text-cyan-400">UnifiedAppConfig</code>{" "}
+          — a discriminated union that tells the rest of the app whether to run
+          in single-provider mode or router mode. Context manager configuration
+          is parsed from environment variables and attached to either mode.
         </p>
       </section>
 

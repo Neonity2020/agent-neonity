@@ -24,6 +24,7 @@ export default function Chapter() {
 import { AnthropicProvider } from "./anthropic.js";
 import { OpenAIProvider } from "./openai-provider.js";
 import { GeminiProvider } from "./gemini.js";
+import { DeepSeekProvider } from "./deepseek-provider.js";
 import type { ProviderType } from "../config.js";
 
 export function createProvider(
@@ -38,8 +39,9 @@ export function createProvider(
     case "gemini":
       return new GeminiProvider(config);
     case "deepseek":
-      // DeepSeek API is OpenAI-compatible
-      return new OpenAIProvider(config);
+      // DeepSeek has both OpenAI-compatible mode and
+      // a native adapter for reasoning_content support
+      return new DeepSeekProvider(config);
     default:
       throw new Error(
         \`Unknown provider type: \${providerType}\`
@@ -49,11 +51,12 @@ export function createProvider(
         />
         <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-4 mt-4">
           <p className="text-sm text-cyan-300">
-            <strong>Key insight:</strong> DeepSeek reuses the OpenAI provider
-            class because its API is intentionally OpenAI-compatible. The only
-            differences are the baseURL (pointing to{" "}
-            <code className="bg-cyan-500/20 px-1 py-0.5 rounded text-xs">api.deepseek.com</code>)
-            and the model name—both handled by the config.
+            <strong>Key insight:</strong> DeepSeek now has its own native
+            adapter that handles{" "}
+            <code className="bg-cyan-500/20 px-1 py-0.5 rounded text-xs">reasoning_content</code>{" "}
+            (chain-of-thought from DeepSeek R1/V3 models). This is surfaced as
+            ReasoningContent blocks in Neonity&apos;s neutral format, giving users
+            visibility into the model&apos;s thinking process.
           </p>
         </div>
       </section>
