@@ -46,6 +46,7 @@ export interface StreamCallbacks {
   onToolUseStart?: (id: string, name: string) => void;
   onToolUseDelta?: (id: string, partialJson: string) => void;
   onToolResult?: (id: string, result: string) => void;
+  onTokenUsage?: (usage: { inputTokens: number; outputTokens: number }) => void;
   onComplete?: (response: ProviderResponse) => void;
 }
 

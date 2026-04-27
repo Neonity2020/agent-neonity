@@ -153,6 +153,11 @@ export class Agent {
       // Append assistant response to history
       this.history.push({ role: "assistant", content: response.content });
 
+      // Report token usage if available
+      if (response.usage) {
+        callbacks?.onTokenUsage?.(response.usage);
+      }
+
       // If the LLM is done (no tool calls), exit the loop
       if (
         response.stopReason === "end_turn" ||

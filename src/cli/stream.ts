@@ -22,6 +22,17 @@ function isJson(str: string): boolean {
   return trimmed.startsWith("{") || trimmed.startsWith("[");
 }
 
+/** Track cumulative token usage across session */
+let sessionTokens = { input: 0, output: 0, rounds: 0 };
+
+/** Format large token counts with K suffix */
+function formatTokenCount(n: number): string {
+  if (n >= 1000) {
+    return (n / 1000).toFixed(1) + "K";
+  }
+  return n.toString();
+}
+
 export function createStreamCallbacks(): StreamCallbacks {
   const renderer = new MarkdownRenderer();
   let hasOutput = false;
@@ -95,6 +106,20 @@ export function createStreamCallbacks(): StreamCallbacks {
       // Collect tool results to display after the tool name
       toolResults.push(result);
     },
+    onTokenUsage(usage: { inputTokens: number; outputTokens: number }) {
+      sessionTokens.input += usage.inputTokens;
+      sessionTokens.output += usage.outputTokens;
+      sessionTokens.rounds += 1;
+
+      // Show per-round usage
+      const total = usage.inputTokens + usage.outputTokens;
+      const inputStr = formatTokenCount(usage.inputTokens);
+      const outputStr = formatTokenCount(usage.outputTokens);
+      const totalStr = formatTokenCount(total);
+      process.stdout.write(
+        chalk.dim(`\n  └─ 💰 ${inputStr} in + ${outputStr} out = ${totalStr}`)
+      );
+    },
     onComplete() {
       // Flush any remaining tool results
       if (inTool && toolResults.length > 0) {
@@ -106,7 +131,22 @@ export function createStreamCallbacks(): StreamCallbacks {
       if (!hasOutput) {
         process.stdout.write("\n");
       }
-      process.stdout.write("\n");
+      // Show session summary if we had multiple rounds
+      if (sessionTokens.rounds > 1) {
+        const total = sessionTokens.input + sessionTokens.output;
+        const inputStr = formatTokenCount(sessionTokens.input);
+        const outputStr = formatTokenCount(sessionTokens.output);
+        const totalStr = formatTokenCount(total);
+        process.stdout.write(
+          chalk.dim(`\n  ┌─ session total (${sessionTokens.rounds} rounds) ─┐\n`)
+        );
+        process.stdout.write(
+          chalk.dim(`  │ 💰 ${inputStr} in + ${outputStr} out = ${totalStr} total`) + " ".repeat(Math.max(0, 28 - (inputStr.length + outputStr.length + totalStr.length + 15))) + chalk.dim(" │\n")
+        );
+        process.stdout.write(chalk.dim("  └" + "─".repeat(39) + "┘\n"));
+      }
+      // Reset for next session
+      sessionTokens = { input: 0, output: 0, rounds: 0 };
     },
   };
 }
