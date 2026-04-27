@@ -26,6 +26,8 @@ const SLASH_COMMANDS = [
   "/skills",
   "/skill",
   "/memory",
+  "/model",
+  "/provider",
   "/router",
   "/router-reset",
   "/cost",
@@ -326,6 +328,69 @@ async function handleCommand(
       return true;
     }
 
+    case "/model": {
+      // 无参数 → 统一交互菜单
+      if (!arg) {
+        await interactiveModelSelect(agent);
+        return true;
+      }
+
+      // /model list — 静态列表
+      if (arg === "list" || arg === "ls") {
+        const models = agent.getAvailableModels();
+        const currentModel = agent.getModel();
+        console.log(chalk.bold("\nAvailable Models:"));
+        for (const m of models) {
+          const isActive = m.id === currentModel;
+          const icon = isActive ? chalk.green("●") : chalk.dim("○");
+          const name = isActive ? chalk.cyan(m.id) : chalk.white(m.id);
+          const label = m.label !== m.id ? ` — ${m.label}` : "";
+          const tier = m.tier ? ` [${m.tier}]` : "";
+          console.log(`  ${icon} ${name}${label}${tier}`);
+        }
+        console.log(chalk.dim("\nUse /model <id> to switch directly, or /model for interactive menu.\n"));
+        return true;
+      }
+
+      // /model <id> — 直接切换
+      const success = agent.switchModel(arg);
+      if (success) {
+        console.log(chalk.green(`✓ Model switched to ${arg}`));
+      } else {
+        console.log(chalk.red(`✗ Failed to switch model to ${arg}`));
+        console.log(chalk.dim("Model switching may not be supported by the current provider."));
+      }
+      return true;
+    }
+
+    case "/provider": {
+      // 无参数 → 统一交互菜单（同 /model）
+      if (!arg) {
+        await interactiveModelSelect(agent);
+        return true;
+      }
+
+      // /provider list — 静态列表
+      if (arg === "list" || arg === "ls") {
+        await interactiveModelSelect(agent);
+        return true;
+      }
+
+      // /provider <name> [model] — 直接切换
+      const provParts = arg.split(/\s+/);
+      const provArg = provParts[0];
+      const modelArg = provParts.slice(1).join(" ");
+      const provSuccess = await agent.switchProvider(provArg, modelArg || undefined);
+      if (provSuccess) {
+        const modelName = modelArg ? ` (model: ${modelArg})` : "";
+        console.log(chalk.green(`✓ Provider switched to ${provArg}${modelName}`));
+      } else {
+        console.log(chalk.red(`✗ Failed to switch provider to ${provArg}`));
+        console.log(chalk.dim("Check that the provider is valid and has an API key configured."));
+      }
+      return true;
+    }
+
     case "/memory": {
       const memoryManager = agent.getMemoryManager();
       if (!memoryManager) {
@@ -438,6 +503,10 @@ function printHelp(): void {
       chalk.dim("  /skills         List available skills\n") +
       chalk.dim("  /skill <name>   Toggle a skill on/off\n") +
       chalk.dim("  /memory         List/search memories\n") +
+      chalk.dim("  /model          List available models\n") +
+      chalk.dim("  /model <id>     Switch to a different model\n") +
+      chalk.dim("  /provider       Select provider interactively (↑↓ + Enter)\n") +
+      chalk.dim("  /provider <n>   Switch provider directly (e.g. /provider glm)\n") +
       chalk.dim("  /router         Show router status (circuits, latency, budget)\n") +
       chalk.dim("  /router-reset   Reset circuit breakers (optional: <name>)\n") +
       chalk.dim("  /cost           Show cumulative token usage & cost\n") +
@@ -445,6 +514,188 @@ function printHelp(): void {
       "\n" +
       chalk.dim("Anything else is sent to the AI agent.\n")
   );
+}
+
+/**
+ * 统一的交互式 Provider + Model 选择菜单。
+ * 第一步：选择 provider（↑↓ + Enter）
+ * 第二步：选择该 provider 下的 model（↑↓ + Enter）
+ * Esc 随时可退出。
+ */
+async function interactiveModelSelect(agent: Agent): Promise<void> {
+  const currentProvider = agent.getProviderName();
+  const currentModel = agent.getModel();
+
+  // ---- 通用终端工具 ----
+  const clearLines = (n: number) => {
+    for (let i = 0; i < n; i++) {
+      process.stdout.write("\x1B[1A\x1B[2K");
+    }
+  };
+
+  type NavItem = { id: string; label: string; detail?: string };
+
+  /**
+   * 通用箭头键选择器。返回选中项的 index，-1 表示取消。
+   */
+  function selectFromList(
+    title: string,
+    items: NavItem[],
+    defaultIndex: number,
+    activeId: string
+  ): Promise<number> {
+    let idx = defaultIndex;
+    const footerLines = 2;
+
+    const render = () => {
+      clearLines(items.length + 3 + footerLines);
+      console.log(chalk.bold(`\n  ${title}\n`));
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        const selected = i === idx;
+        const active = it.id === activeId;
+        const detail = it.detail ? `  ${chalk.dim(it.detail)}` : "";
+
+        if (selected) {
+          const name = active
+            ? chalk.cyan(`● ${it.id}`)
+            : chalk.white(`○ ${it.id}`);
+          console.log(`  ${chalk.bgBlue.white("▶ ")}${name}  ${chalk.dim("—")} ${chalk.dim(it.label)}${detail}`);
+        } else {
+          const icon = active ? chalk.green("●") : chalk.dim("○");
+          const name = active ? chalk.cyan(it.id) : chalk.dim(it.id);
+          console.log(`    ${icon} ${name}  ${chalk.dim("—")} ${chalk.dim(it.label)}${detail}`);
+        }
+      }
+      console.log(chalk.dim("\n  ↑↓ Navigate  |  Enter Confirm  |  Esc Cancel\n"));
+    };
+
+    render();
+
+    return new Promise((resolve) => {
+      const onKeypress = (_char: string, key: { name: string; ctrl?: boolean }) => {
+        if (key.ctrl && _char === "c") {
+          cleanup();
+          console.log(chalk.dim("Cancelled.\n"));
+          resolve(-1);
+          return;
+        }
+        switch (key.name) {
+          case "up":
+          case "k":
+            idx = (idx - 1 + items.length) % items.length;
+            render();
+            break;
+          case "down":
+          case "j":
+            idx = (idx + 1) % items.length;
+            render();
+            break;
+          case "return":
+          case "enter":
+            cleanup();
+            clearLines(items.length + 3 + footerLines + 1);
+            resolve(idx);
+            break;
+          case "escape":
+            cleanup();
+            clearLines(items.length + 3 + footerLines + 1);
+            console.log(chalk.dim("Cancelled.\n"));
+            resolve(-1);
+            break;
+        }
+      };
+
+      const cleanup = () => {
+        process.stdin.removeListener("keypress", onKeypress);
+        process.stdin.setRawMode?.(false);
+      };
+
+      process.stdin.setRawMode?.(true);
+      process.stdin.resume();
+      process.stdin.on("keypress", onKeypress);
+    });
+  }
+
+  // ---- 动态构建 provider 列表 ----
+  const { getApiKey } = await import("../config.js");
+  const allProviders: NavItem[] = [
+    { id: "anthropic", label: "Anthropic (Claude)" },
+    { id: "openai", label: "OpenAI (GPT)" },
+    { id: "gemini", label: "Google Gemini" },
+    { id: "deepseek", label: "DeepSeek" },
+    { id: "minimax", label: "MiniMax" },
+    { id: "glm", label: "GLM (Zhipu)" },
+  ].map(p => ({
+    ...p,
+    detail: getApiKey(p.id as Parameters<typeof getApiKey>[0]) ? chalk.green("key ✓") : chalk.red("key ✗"),
+  }));
+
+  let defaultIdx = allProviders.findIndex(p => p.id === currentProvider);
+  if (defaultIdx === -1) defaultIdx = 0;
+
+  // ---- 第一步：选择 provider ----
+  const provIdx = await selectFromList(
+    "Select Provider",
+    allProviders,
+    defaultIdx,
+    currentProvider
+  );
+  if (provIdx === -1) return;
+
+  const selectedProv = allProviders[provIdx];
+
+  // 如果选的就是当前 provider，跳到 model 选择
+  if (selectedProv.id === currentProvider) {
+    // 直接进入 model 选择
+  } else {
+    // 先切换 provider
+    const ok = await agent.switchProvider(selectedProv.id);
+    if (!ok) {
+      console.log(chalk.red(`✗ Failed to switch provider to ${selectedProv.id}`));
+      console.log(chalk.dim("Check that the provider has an API key configured.\n"));
+      return;
+    }
+    console.log(chalk.green(`✓ Provider switched to ${selectedProv.id}`));
+  }
+
+  // ---- 第二步：选择 model ----
+  const models = agent.getAvailableModels();
+  if (models.length <= 1) {
+    // 只有一个模型，无需选择
+    const m = models[0];
+    console.log(chalk.green(`  model: ${m.id}\n`));
+    return;
+  }
+
+  const modelItems: NavItem[] = models.map(m => ({
+    id: m.id,
+    label: m.label !== m.id ? m.label : m.id,
+    detail: m.tier ? `[${m.tier}]` : undefined,
+  }));
+
+  const newCurrentModel = agent.getModel();
+  let defaultModelIdx = modelItems.findIndex(m => m.id === newCurrentModel);
+  if (defaultModelIdx === -1) defaultModelIdx = 0;
+
+  const modelIdx = await selectFromList(
+    `Select Model (${selectedProv.id})`,
+    modelItems,
+    defaultModelIdx,
+    newCurrentModel
+  );
+  if (modelIdx === -1) {
+    console.log(chalk.green(`  model: ${agent.getModel()}\n`));
+    return;
+  }
+
+  const selectedModel = modelItems[modelIdx];
+  const ok = agent.switchModel(selectedModel.id);
+  if (ok) {
+    console.log(chalk.green(`✓ Provider: ${selectedProv.id} | Model: ${selectedModel.id}\n`));
+  } else {
+    console.log(chalk.red(`✗ Failed to switch model to ${selectedModel.id}\n`));
+  }
 }
 
 /**

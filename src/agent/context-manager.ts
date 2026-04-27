@@ -12,6 +12,9 @@ const MODEL_CONTEXT_WINDOWS: readonly { pattern: string; windowSize: number }[] 
   { pattern: "gemini-2.5-flash", windowSize: 1_048_576 },
   { pattern: "deepseek-v4-pro", windowSize: 128_000 },
   { pattern: "deepseek-chat", windowSize: 128_000 },
+  { pattern: "glm-5", windowSize: 256_000 },
+  { pattern: "glm-4", windowSize: 128_000 },
+  { pattern: "glm-5-0514", windowSize: 256_000 },
 ];
 
 const DEFAULT_CONTEXT_WINDOW = 128_000;

@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type {
   ContentBlock,
   Message,
+  ModelInfo,
   Provider,
   ProviderConfig,
   ProviderResponse,
@@ -12,7 +13,7 @@ import type {
 export class MinimaxProvider implements Provider {
   readonly name = "minimax";
   private client: Anthropic;
-  private model: string;
+  private _model: string;
   private maxTokens: number;
   private temperature?: number;
 
@@ -21,9 +22,25 @@ export class MinimaxProvider implements Provider {
       apiKey: config.apiKey,
       baseURL: config.baseURL ?? "https://api.minimaxi.com/anthropic",
     });
-    this.model = config.model;
+    this._model = config.model;
     this.maxTokens = config.maxTokens;
     this.temperature = config.temperature;
+  }
+
+  get model(): string {
+    return this._model;
+  }
+
+  setModel(model: string): void {
+    this._model = model;
+  }
+
+  listModels(): ModelInfo[] {
+    return [
+      { id: "MiniMax-M2.7", label: "MiniMax-M2.7", tier: "premium" },
+      { id: "MiniMax-M2", label: "MiniMax-M2", tier: "standard" },
+      { id: "MiniMax-M1", label: "MiniMax-M1", tier: "cheap" },
+    ];
   }
 
   async chat(
@@ -35,7 +52,7 @@ export class MinimaxProvider implements Provider {
     const sdkMessages = this.convertMessages(messages);
 
     const params: Anthropic.MessageCreateParams = {
-      model: this.model,
+      model: this._model,
       max_tokens: this.maxTokens,
       messages: sdkMessages,
       ...(systemPrompt && { system: systemPrompt }),

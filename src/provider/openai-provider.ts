@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import type {
   ContentBlock,
   Message,
+  ModelInfo,
   Provider,
   ProviderConfig,
   ProviderResponse,
@@ -12,18 +13,38 @@ import type {
 export class OpenAIProvider implements Provider {
   readonly name = "openai";
   private client: OpenAI;
-  private model: string;
+  private _model: string;
   private maxTokens: number;
   private temperature?: number;
+
+  get model(): string {
+    return this._model;
+  }
 
   constructor(config: ProviderConfig) {
     this.client = new OpenAI({
       apiKey: config.apiKey,
       ...(config.baseURL && { baseURL: config.baseURL }),
     });
-    this.model = config.model;
+    this._model = config.model;
     this.maxTokens = config.maxTokens;
     this.temperature = config.temperature;
+  }
+
+  setModel(model: string): void {
+    this._model = model;
+  }
+
+  listModels(): ModelInfo[] {
+    return [
+      { id: "gpt-4.1", label: "GPT-4.1", tier: "premium" },
+      { id: "gpt-4.1-mini", label: "GPT-4.1 Mini", tier: "standard" },
+      { id: "gpt-4.1-nano", label: "GPT-4.1 Nano", tier: "cheap" },
+      { id: "gpt-4o", label: "GPT-4o", tier: "premium" },
+      { id: "gpt-4o-mini", label: "GPT-4o Mini", tier: "standard" },
+      { id: "o3", label: "OpenAI o3", tier: "premium" },
+      { id: "o3-mini", label: "OpenAI o3 Mini", tier: "standard" },
+    ];
   }
 
   async chat(
@@ -43,7 +64,7 @@ export class OpenAIProvider implements Provider {
     }
 
     const params: OpenAI.ChatCompletionCreateParamsNonStreaming = {
-      model: this.model,
+      model: this._model,
       max_tokens: this.maxTokens,
       messages: sdkMessages,
       ...(this.temperature !== undefined && { temperature: this.temperature }),

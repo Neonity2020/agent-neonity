@@ -28,6 +28,12 @@ export const MODEL_ENCODINGS: Record<string, string> = {
   "deepseek": "cl100k_base",
   "deepseek-chat": "cl100k_base",
 
+  // Zhipu AI (GLM)
+  "glm": "cl100k_base",
+  "glm-5": "cl100k_base",
+  "glm-4": "cl100k_base",
+  "glm-5-0514": "cl100k_base",
+
   // Gemini
   "gemini": "cl100k_base",
 

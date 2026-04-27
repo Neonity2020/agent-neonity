@@ -1,7 +1,9 @@
 import type {
   AgentConfig,
   Message,
+  ModelInfo,
   Provider,
+  ProviderConfig,
   StreamCallbacks,
   ToolResultContent,
   ToolDefinition,
@@ -66,6 +68,73 @@ export class Agent {
   /** Get the Provider (for REPL to inspect router stats). */
   getProvider(): Provider {
     return this.provider;
+  }
+
+  /** Get the current model name. */
+  getModel(): string {
+    return this.provider.model ?? "unknown";
+  }
+
+  /** Switch to a different model. Returns true if successful. */
+  switchModel(model: string): boolean {
+    if (this.provider.setModel) {
+      this.provider.setModel(model);
+      return true;
+    }
+    return false;
+  }
+
+  /** Get available models for the current provider. */
+  getAvailableModels(): ModelInfo[] {
+    if (this.provider.listModels) {
+      return this.provider.listModels();
+    }
+    // Fallback: just return the current model
+    return [{ id: this.getModel(), label: this.getModel() }];
+  }
+
+  /** Get current provider name. */
+  getProviderName(): string {
+    return this.provider.name;
+  }
+
+  /** Switch to a different provider (type + optional model override). */
+  async switchProvider(providerType: string, model?: string): Promise<boolean> {
+    // Dynamically import to avoid circular deps — factory needs Agent, Agent can't import factory
+    const { createProvider } = await import("../provider/factory.js");
+    const { getApiKey, DEFAULT_MODELS } = await import("../config.js");
+
+    const validProviders = ["anthropic", "openai", "gemini", "deepseek", "minimax", "glm"];
+    if (!validProviders.includes(providerType)) {
+      return false;
+    }
+
+    const pt = providerType as "anthropic" | "openai" | "gemini" | "deepseek" | "minimax" | "glm";
+    const apiKey = getApiKey(pt);
+    if (!apiKey) {
+      console.error(`No API key found for provider: ${providerType}`);
+      return false;
+    }
+
+    const finalModel = model ?? DEFAULT_MODELS[pt];
+
+    const providerConfig: ProviderConfig = {
+      apiKey,
+      model: finalModel,
+      maxTokens: parseInt(process.env.MAX_TOKENS ?? "4096", 10),
+      temperature: process.env.TEMPERATURE ? parseFloat(process.env.TEMPERATURE) : undefined,
+      ...(pt === "deepseek" && { baseURL: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com" }),
+      ...(pt === "minimax" && { baseURL: process.env.MINIMAX_BASE_URL ?? "https://api.minimaxi.com/anthropic" }),
+      ...(pt === "glm" && { baseURL: process.env.GLM_BASE_URL ?? "https://open.bigmodel.cn/api/coding/paas/v4" }),
+    };
+
+    const newProvider = createProvider(pt, providerConfig);
+    this.provider = newProvider;
+
+    // Also update the stored config so context-manager etc. get the right model
+    this.config.provider = providerConfig;
+
+    return true;
   }
 
   /** Get the MemoryManager (for REPL to manage memories). */

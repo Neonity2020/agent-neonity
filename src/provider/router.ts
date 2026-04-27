@@ -1,5 +1,6 @@
 import type {
   Message,
+  ModelInfo,
   Provider,
   ProviderResponse,
   StreamCallbacks,
@@ -259,6 +260,9 @@ export interface RouterConfig {
   costRates?: Record<string, { input: number; output: number }>;
 }
 
+/** Re-export ModelInfo for convenience. */
+export type { ModelInfo } from "../types.js";
+
 /**
  * Implements the `Provider` interface by routing each `chat()` call to the
  * best-fit underlying provider. Supports:
@@ -273,6 +277,16 @@ export interface RouterConfig {
  */
 export class ProviderRouter implements Provider {
   readonly name = "router";
+  /** Reflects the model of the last used provider. */
+  private _model = "unknown";
+
+  get model(): string {
+    return this._model;
+  }
+
+  setModel(model: string): void {
+    this._model = model;
+  }
 
   private config: RouterConfig;
   private tierRoundRobin = new Map<CostTier, number>();
@@ -342,6 +356,7 @@ export class ProviderRouter implements Provider {
         const response = await entry.provider.chat(messages, tools, callbacks, systemPrompt);
         const elapsed = Date.now() - startedAt;
 
+        this._model = entry.provider.model ?? "unknown";
         this.onSuccess(entry.label, elapsed);
         this.trackUsage(response, entry.label);
         if (this.config.trackLatency) {
@@ -373,6 +388,7 @@ export class ProviderRouter implements Provider {
             const response = await alt.provider.chat(messages, tools, callbacks, systemPrompt);
             const elapsed = Date.now() - startedAt;
 
+            this._model = alt.provider.model ?? "unknown";
             this.onSuccess(alt.label, elapsed);
             this.trackUsage(response, alt.label);
             if (this.config.trackLatency) {
@@ -578,6 +594,30 @@ export class ProviderRouter implements Provider {
   /** Reset the token budget to zero. */
   resetBudget(): void {
     this.budget = { inputTokens: 0, outputTokens: 0, estimatedCost: 0 };
+  }
+
+  /** List all available models from all tiers. */
+  listModels(): ModelInfo[] {
+    const models: ModelInfo[] = [];
+    for (const tier of TIER_FALLBACK_ORDER) {
+      const entries = this.config.providers.get(tier);
+      if (!entries) continue;
+      for (const entry of entries) {
+        if (entry.provider.listModels) {
+          for (const m of entry.provider.listModels()) {
+            models.push({ ...m, tier: m.tier ?? tier });
+          }
+        } else {
+          // Fallback: just list the current model
+          models.push({
+            id: entry.provider.model ?? "unknown",
+            label: entry.label,
+            tier: tier,
+          });
+        }
+      }
+    }
+    return models;
   }
 
   // ── Circuit Breaker Status ──────────────────────────────

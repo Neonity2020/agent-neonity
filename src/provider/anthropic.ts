@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type {
   ContentBlock,
   Message,
+  ModelInfo,
   Provider,
   ProviderConfig,
   ProviderResponse,
@@ -12,15 +13,33 @@ import type {
 export class AnthropicProvider implements Provider {
   readonly name = "anthropic";
   private client: Anthropic;
-  private model: string;
+  private _model: string;
   private maxTokens: number;
   private temperature?: number;
 
   constructor(config: ProviderConfig) {
     this.client = new Anthropic({ apiKey: config.apiKey });
-    this.model = config.model;
+    this._model = config.model;
     this.maxTokens = config.maxTokens;
     this.temperature = config.temperature;
+  }
+
+  get model(): string {
+    return this._model;
+  }
+
+  setModel(model: string): void {
+    this._model = model;
+  }
+
+  listModels(): ModelInfo[] {
+    return [
+      { id: "claude-sonnet-4-20250514", label: "Claude Sonnet 4", tier: "premium" },
+      { id: "claude-sonnet-4-20250514", label: "Claude Sonnet 4 (Latest)", tier: "standard" },
+      { id: "claude-haiku-3-5-20241022", label: "Claude Haiku 3.5", tier: "cheap" },
+      { id: "claude-opus-4-5-20250514", label: "Claude Opus 4", tier: "premium" },
+      { id: "claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet (Legacy)", tier: "standard" },
+    ];
   }
 
   async chat(
@@ -32,7 +51,7 @@ export class AnthropicProvider implements Provider {
     const sdkMessages = this.convertMessages(messages);
 
     const params: Anthropic.MessageCreateParams = {
-      model: this.model,
+      model: this._model,
       max_tokens: this.maxTokens,
       messages: sdkMessages,
       ...(systemPrompt && { system: systemPrompt }),

@@ -69,14 +69,27 @@ export interface ToolDefinition {
   };
 }
 
+export interface ModelInfo {
+  /** Model identifier (e.g., "claude-sonnet-4-20250514") */
+  id: string;
+  /** Human-readable label (e.g., "Claude Sonnet 4") */
+  label: string;
+  /** Cost tier if applicable */
+  tier?: "cheap" | "standard" | "premium";
+}
+
 export interface Provider {
   readonly name: string;
+  readonly model?: string;
   chat(
     messages: Message[],
     tools: ToolDefinition[],
     callbacks?: StreamCallbacks,
     systemPrompt?: string
   ): Promise<ProviderResponse>;
+  setModel?(model: string): void;
+  /** List available models for this provider. */
+  listModels?(): ModelInfo[];
 }
 
 // --- Tool interface ---

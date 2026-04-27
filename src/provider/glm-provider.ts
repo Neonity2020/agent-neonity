@@ -12,7 +12,7 @@ import type {
 interface ChatMessage {
   role: string;
   content: string | null;
-  reasoning_content?: string;
+  thinking_content?: string;
   tool_calls?: Array<{
     id: string;
     type: "function";
@@ -21,8 +21,17 @@ interface ChatMessage {
   tool_call_id?: string;
 }
 
-export class DeepSeekProvider implements Provider {
-  readonly name = "deepseek";
+/**
+ * Provider for Zhipu AI (GLM) models.
+ * Supports GLM-4 and GLM-5 series with OpenAI-compatible API.
+ * 
+ * Features:
+ * - Thinking mode (GLM-4): thinking_content field
+ * - Tool calling support
+ * - Token usage reporting
+ */
+export class GLMProvider implements Provider {
+  readonly name = "glm";
   private apiKey: string;
   private baseURL: string;
   private _model: string;
@@ -31,7 +40,7 @@ export class DeepSeekProvider implements Provider {
 
   constructor(config: ProviderConfig) {
     this.apiKey = config.apiKey;
-    this.baseURL = config.baseURL ?? "https://api.deepseek.com";
+    this.baseURL = config.baseURL ?? "https://open.bigmodel.cn/api/coding/paas/v4";
     this._model = config.model;
     this.maxTokens = config.maxTokens;
     this.temperature = config.temperature;
@@ -47,10 +56,10 @@ export class DeepSeekProvider implements Provider {
 
   listModels(): ModelInfo[] {
     return [
-      { id: "deepseek-v4-pro", label: "DeepSeek V4 Pro", tier: "premium" },
-      { id: "deepseek-v4", label: "DeepSeek V4", tier: "standard" },
-      { id: "deepseek-chat", label: "DeepSeek Chat", tier: "standard" },
-      { id: "deepseek-coder", label: "DeepSeek Coder", tier: "cheap" },
+      { id: "GLM-5.1", label: "GLM-5.1", tier: "premium" },
+      { id: "GLM-5-Turbo", label: "GLM-5-Turbo", tier: "standard" },
+      { id: "GLM-4.7", label: "GLM-4.7", tier: "standard" },
+      { id: "GLM-4.5-air", label: "GLM-4.5-Air", tier: "cheap" },
     ];
   }
 
@@ -94,27 +103,7 @@ export class DeepSeekProvider implements Provider {
 
     if (!resp.ok) {
       const text = await resp.text();
-      // Debug: log the messages we sent so we can see what's missing
-      const assistantMsgs = sdkMessages.filter((m) => m.role === "assistant");
-      const withRC = assistantMsgs.filter(
-        (m) => "reasoning_content" in m && (m as ChatMessage).reasoning_content !== undefined
-      );
-      console.error(
-        `[deepseek-debug] ${resp.status} error. Sent ${sdkMessages.length} msgs, ` +
-        `${assistantMsgs.length} assistant, ${withRC.length} with reasoning_content`
-      );
-      for (let i = 0; i < sdkMessages.length; i++) {
-        const m = sdkMessages[i];
-        if (m.role === "assistant") {
-          const hasRC = "reasoning_content" in m;
-          const hasTC = m.tool_calls && m.tool_calls.length > 0;
-          console.error(
-            `  [${i}] assistant: content=${JSON.stringify(m.content)?.slice(0, 60)}, ` +
-            `reasoning_content=${hasRC ? "YES" : "MISSING"}, tool_calls=${hasTC ? "YES" : "no"}`
-          );
-        }
-      }
-      throw new Error(`DeepSeek API error (${resp.status}): ${text}`);
+      throw new Error(`GLM API error (${resp.status}): ${text}`);
     }
 
     const data = (await resp.json()) as {
@@ -122,7 +111,7 @@ export class DeepSeekProvider implements Provider {
         message: {
           role: string;
           content: string | null;
-          reasoning_content?: string;
+          thinking_content?: string;
           tool_calls?: Array<{
             id: string;
             type: "function";
@@ -131,23 +120,23 @@ export class DeepSeekProvider implements Provider {
         };
         finish_reason: string;
       }>;
-      usage?: { prompt_tokens: number; completion_tokens: number };
+      usage?: {
+        prompt_tokens: number;
+        completion_tokens: number;
+      };
     };
 
     const choice = data.choices?.[0];
     const message = choice?.message;
 
-    // Debug: log what we captured from the response
-    console.error(
-      `[deepseek-debug] Response: content=${JSON.stringify(message?.content)?.slice(0, 60)}, ` +
-      `reasoning_content=${message?.reasoning_content ? `${message.reasoning_content.length} chars` : "MISSING"}, ` +
-      `tool_calls=${message?.tool_calls?.length ?? 0}`
-    );
-
     if (!message) {
       const response: ProviderResponse = {
         stopReason: "end_turn",
         content: [],
+        usage: data.usage && {
+          inputTokens: data.usage.prompt_tokens,
+          outputTokens: data.usage.completion_tokens,
+        },
       };
       callbacks?.onComplete?.(response);
       return response;
@@ -155,8 +144,9 @@ export class DeepSeekProvider implements Provider {
 
     const content: ContentBlock[] = [];
 
-    if (message.reasoning_content !== undefined && message.reasoning_content !== null) {
-      content.push({ type: "reasoning", text: message.reasoning_content });
+    // GLM uses thinking_content instead of reasoning_content
+    if (message.thinking_content !== undefined && message.thinking_content !== null) {
+      content.push({ type: "reasoning", text: message.thinking_content });
     }
 
     if (message.content) {
@@ -187,7 +177,14 @@ export class DeepSeekProvider implements Provider {
     const hasToolCalls = (message.tool_calls?.length ?? 0) > 0;
     const stopReason = this.mapStopReason(choice.finish_reason, hasToolCalls);
 
-    const response: ProviderResponse = { stopReason, content };
+    const response: ProviderResponse = {
+      stopReason,
+      content,
+      usage: data.usage && {
+        inputTokens: data.usage.prompt_tokens,
+        outputTokens: data.usage.completion_tokens,
+      },
+    };
     callbacks?.onComplete?.(response);
     return response;
   }
@@ -199,9 +196,7 @@ export class DeepSeekProvider implements Provider {
       const toolResults = msg.content.filter((b) => b.type === "tool_result");
       const textBlocks = msg.content.filter((b) => b.type === "text");
       const toolUseBlocks = msg.content.filter((b) => b.type === "tool_use");
-      const reasoningBlocks = msg.content.filter(
-        (b) => b.type === "reasoning"
-      );
+      const reasoningBlocks = msg.content.filter((b) => b.type === "reasoning");
 
       for (const tr of toolResults) {
         result.push({
@@ -211,7 +206,7 @@ export class DeepSeekProvider implements Provider {
         });
       }
 
-      const reasoningText =
+      const thinkingText =
         reasoningBlocks.length > 0
           ? reasoningBlocks
               .map((b) => (b as { type: "reasoning"; text: string }).text)
@@ -242,11 +237,11 @@ export class DeepSeekProvider implements Provider {
             };
           }),
         };
-        if (reasoningText !== undefined) assistantMsg.reasoning_content = reasoningText;
+        if (thinkingText !== undefined) assistantMsg.thinking_content = thinkingText;
         result.push(assistantMsg);
       } else if (
         textBlocks.length > 0 ||
-        (msg.role === "assistant" && reasoningText)
+        (msg.role === "assistant" && thinkingText)
       ) {
         const textMsg: ChatMessage = {
           role: msg.role,
@@ -255,8 +250,8 @@ export class DeepSeekProvider implements Provider {
               .map((b) => (b as { type: "text"; text: string }).text)
               .join("") || null,
         };
-        if (msg.role === "assistant" && reasoningText !== undefined) {
-          textMsg.reasoning_content = reasoningText;
+        if (msg.role === "assistant" && thinkingText !== undefined) {
+          textMsg.thinking_content = thinkingText;
         }
         result.push(textMsg);
       }

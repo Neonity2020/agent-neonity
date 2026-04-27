@@ -4,6 +4,7 @@ import { OpenAIProvider } from "./openai-provider.js";
 import { GeminiProvider } from "./gemini.js";
 import { DeepSeekProvider } from "./deepseek-provider.js";
 import { MinimaxProvider } from "./minimax.js";
+import { GLMProvider } from "./glm-provider.js";
 import type { ProviderType } from "../config.js";
 import {
   ProviderRouter,
@@ -32,6 +33,8 @@ export function createProvider(
       return new DeepSeekProvider(config);
     case "minimax":
       return new MinimaxProvider(config);
+    case "glm":
+      return new GLMProvider(config);
     default:
       throw new Error(`Unknown provider type: ${providerType}`);
   }

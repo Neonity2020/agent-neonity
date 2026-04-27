@@ -3,7 +3,7 @@ import type { ProviderConfig } from "./types.js";
 import type { CostTier } from "./provider/router.js";
 import type { ContextManagerConfig, ContextStrategy } from "./agent/context-manager.js";
 
-export type ProviderType = "anthropic" | "openai" | "gemini" | "deepseek" | "minimax";
+export type ProviderType = "anthropic" | "openai" | "gemini" | "deepseek" | "minimax" | "glm";
 
 // ── Single-provider config (legacy / non-router mode) ──────
 
@@ -60,6 +60,7 @@ const DEFAULT_MODELS: Record<ProviderType, string> = {
   gemini: "gemini-2.5-flash",
   deepseek: "deepseek-v4-pro",
   minimax: "MiniMax-M2.7",
+  glm: "GLM-5.1",
 };
 
 const CHEAP_DEFAULT_MODELS: Record<ProviderType, string> = {
@@ -68,6 +69,7 @@ const CHEAP_DEFAULT_MODELS: Record<ProviderType, string> = {
   gemini: "gemini-2.5-flash",
   deepseek: "deepseek-v4-pro",
   minimax: "MiniMax-M2.7",
+  glm: "GLM-5.1",
 };
 
 const PREMIUM_DEFAULT_MODELS: Record<ProviderType, string> = {
@@ -76,9 +78,10 @@ const PREMIUM_DEFAULT_MODELS: Record<ProviderType, string> = {
   gemini: "gemini-2.5-pro",
   deepseek: "deepseek-v4-pro",
   minimax: "MiniMax-M2.7",
+  glm: "GLM-5.1",
 };
 
-const ALL_PROVIDERS: ProviderType[] = ["anthropic", "openai", "gemini", "deepseek", "minimax"];
+const ALL_PROVIDERS: ProviderType[] = ["anthropic", "openai", "gemini", "deepseek", "minimax", "glm"];
 
 // ── Load ────────────────────────────────────────────────────
 
@@ -105,7 +108,7 @@ function loadSingleConfig(): AppConfig {
   const providerType = resolveProvider(preferred);
   if (!providerType) {
     throw new Error(
-      "No API key found. Set at least one of: ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, or DEEPSEEK_API_KEY."
+      "No API key found. Set at least one of: ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, DEEPSEEK_API_KEY, MINIMAX_API_KEY, or GLM_API_KEY."
     );
   }
 
@@ -228,6 +231,9 @@ function buildProviderConfig(
     ...(providerType === "minimax" && {
       baseURL: process.env.MINIMAX_BASE_URL ?? "https://api.minimaxi.com/anthropic",
     }),
+    ...(providerType === "glm" && {
+      baseURL: process.env.GLM_BASE_URL ?? "https://open.bigmodel.cn/api/coding/paas/v4",
+    }),
   };
 }
 
@@ -251,8 +257,14 @@ function getApiKey(providerType: ProviderType): string | undefined {
       return process.env.DEEPSEEK_API_KEY;
     case "minimax":
       return process.env.MINIMAX_API_KEY;
+    case "glm":
+      return process.env.GLM_API_KEY;
   }
 }
+
+// ── Exported for external use (e.g., Agent.switchProvider) ──
+
+export { getApiKey, DEFAULT_MODELS };
 
 // ── Context management config ────────────────────────────────
 

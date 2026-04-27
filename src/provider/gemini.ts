@@ -2,6 +2,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import type {
   ContentBlock,
   Message,
+  ModelInfo,
   Provider,
   ProviderConfig,
   ProviderResponse,
@@ -12,15 +13,34 @@ import type {
 export class GeminiProvider implements Provider {
   readonly name = "gemini";
   private client: GoogleGenAI;
-  private model: string;
+  private _model: string;
   private maxTokens: number;
   private temperature?: number;
 
   constructor(config: ProviderConfig) {
     this.client = new GoogleGenAI({ apiKey: config.apiKey });
-    this.model = config.model;
+    this._model = config.model;
     this.maxTokens = config.maxTokens;
     this.temperature = config.temperature;
+  }
+
+  get model(): string {
+    return this._model;
+  }
+
+  setModel(model: string): void {
+    this._model = model;
+  }
+
+  listModels(): ModelInfo[] {
+    return [
+      { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", tier: "standard" },
+      { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", tier: "premium" },
+      { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash", tier: "cheap" },
+      { id: "gemini-2.0-flash-lite", label: "Gemini 2.0 Flash-Lite", tier: "cheap" },
+      { id: "gemini-1.5-pro", label: "Gemini 1.5 Pro", tier: "premium" },
+      { id: "gemini-1.5-flash", label: "Gemini 1.5 Flash", tier: "standard" },
+    ];
   }
 
   async chat(
@@ -55,7 +75,7 @@ export class GeminiProvider implements Provider {
     }
 
     const response = await this.client.models.generateContent({
-      model: this.model,
+      model: this._model,
       contents,
       config,
     });
