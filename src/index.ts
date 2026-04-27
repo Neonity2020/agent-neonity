@@ -21,6 +21,7 @@ import { testWriterSkill } from "./skill/builtin/test-writer.js";
 import { gitCommitterSkill } from "./skill/builtin/git-committer.js";
 import { docWriterSkill } from "./skill/builtin/doc-writer.js";
 import { hnTopSkill } from "./skill/builtin/hn-top.js";
+import { gitPusherSkill } from "./skill/builtin/git-pusher.js";
 
 async function main() {
   const unified = loadConfig();
@@ -61,6 +62,7 @@ async function main() {
   skillRegistry.register(gitCommitterSkill);
   skillRegistry.register(docWriterSkill);
   skillRegistry.register(hnTopSkill);
+  skillRegistry.register(gitPusherSkill);
   skillRegistry.loadState();
 
   const maxIterations = unified.config.maxIterations;

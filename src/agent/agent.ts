@@ -186,6 +186,9 @@ export class Agent {
               );
             }
 
+            // Notify stream callbacks of tool result for rich display
+            callbacks?.onToolResult?.(block.id, result);
+
             toolResults.push({
               type: "tool_result",
               tool_use_id: block.id,

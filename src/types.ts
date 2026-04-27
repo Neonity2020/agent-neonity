@@ -45,6 +45,7 @@ export interface StreamCallbacks {
   onTextDelta?: (text: string) => void;
   onToolUseStart?: (id: string, name: string) => void;
   onToolUseDelta?: (id: string, partialJson: string) => void;
+  onToolResult?: (id: string, result: string) => void;
   onComplete?: (response: ProviderResponse) => void;
 }
 

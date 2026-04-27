@@ -331,6 +331,8 @@ export class MarkdownRenderer {
     const termWidth = process.stdout.columns || 80;
     const totalMin =
       colWidths.reduce((s, w) => s + w, 0) + colCount + 1; // +1 for leading border
+    
+    // Only scale down if we actually exceed terminal width
     if (totalMin > termWidth && colCount > 1) {
       // Scale down proportionally
       const excess = totalMin - termWidth;
@@ -343,6 +345,11 @@ export class MarkdownRenderer {
           }
         }
       }
+    }
+    
+    // Ensure all widths are positive
+    for (let i = 0; i < colWidths.length; i++) {
+      colWidths[i] = Math.max(1, colWidths[i]);
     }
 
     // Render top border
@@ -396,7 +403,8 @@ export class MarkdownRenderer {
       const width = widths[i];
       const cell = i < cells.length ? cells[i] : { text: "", align: "left" as const };
       const rawText = this.stripMarkup(cell.text);
-      const padTotal = width - rawText.length;
+      // Ensure padTotal is non-negative to prevent "Invalid count value" in String.repeat
+      const padTotal = Math.max(0, width - rawText.length);
       const padLeft =
         cell.align === "center"
           ? Math.floor(padTotal / 2)
