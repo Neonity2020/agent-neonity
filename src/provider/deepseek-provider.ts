@@ -94,26 +94,6 @@ export class DeepSeekProvider implements Provider {
 
     if (!resp.ok) {
       const text = await resp.text();
-      // Debug: log the messages we sent so we can see what's missing
-      const assistantMsgs = sdkMessages.filter((m) => m.role === "assistant");
-      const withRC = assistantMsgs.filter(
-        (m) => "reasoning_content" in m && (m as ChatMessage).reasoning_content !== undefined
-      );
-      console.error(
-        `[deepseek-debug] ${resp.status} error. Sent ${sdkMessages.length} msgs, ` +
-        `${assistantMsgs.length} assistant, ${withRC.length} with reasoning_content`
-      );
-      for (let i = 0; i < sdkMessages.length; i++) {
-        const m = sdkMessages[i];
-        if (m.role === "assistant") {
-          const hasRC = "reasoning_content" in m;
-          const hasTC = m.tool_calls && m.tool_calls.length > 0;
-          console.error(
-            `  [${i}] assistant: content=${JSON.stringify(m.content)?.slice(0, 60)}, ` +
-            `reasoning_content=${hasRC ? "YES" : "MISSING"}, tool_calls=${hasTC ? "YES" : "no"}`
-          );
-        }
-      }
       throw new Error(`DeepSeek API error (${resp.status}): ${text}`);
     }
 
@@ -136,13 +116,6 @@ export class DeepSeekProvider implements Provider {
 
     const choice = data.choices?.[0];
     const message = choice?.message;
-
-    // Debug: log what we captured from the response
-    console.error(
-      `[deepseek-debug] Response: content=${JSON.stringify(message?.content)?.slice(0, 60)}, ` +
-      `reasoning_content=${message?.reasoning_content ? `${message.reasoning_content.length} chars` : "MISSING"}, ` +
-      `tool_calls=${message?.tool_calls?.length ?? 0}`
-    );
 
     if (!message) {
       const response: ProviderResponse = {
@@ -225,6 +198,7 @@ export class DeepSeekProvider implements Provider {
             textBlocks
               .map((b) => (b as { type: "text"; text: string }).text)
               .join("") || null,
+          reasoning_content: reasoningText ?? "",
           tool_calls: toolUseBlocks.map((b) => {
             const tu = b as {
               type: "tool_use";
@@ -242,7 +216,6 @@ export class DeepSeekProvider implements Provider {
             };
           }),
         };
-        if (reasoningText !== undefined) assistantMsg.reasoning_content = reasoningText;
         result.push(assistantMsg);
       } else if (
         textBlocks.length > 0 ||
@@ -255,8 +228,8 @@ export class DeepSeekProvider implements Provider {
               .map((b) => (b as { type: "text"; text: string }).text)
               .join("") || null,
         };
-        if (msg.role === "assistant" && reasoningText !== undefined) {
-          textMsg.reasoning_content = reasoningText;
+        if (msg.role === "assistant") {
+          textMsg.reasoning_content = reasoningText ?? "";
         }
         result.push(textMsg);
       }

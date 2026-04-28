@@ -567,11 +567,17 @@ async function interactiveModelSelect(agent: Agent, rl: readline.Interface): Pro
     activeId: string
   ): Promise<number> {
     let idx = defaultIndex;
-    const footerLines = 2;
+    let drawnLines = 0;
 
     const render = () => {
-      clearLines(items.length + 3 + footerLines);
-      console.log(chalk.bold(`\n  ${title}\n`));
+      // 清除上一次绘制的所有行
+      clearLines(drawnLines);
+
+      const lines: string[] = [];
+      lines.push("");
+      lines.push(chalk.bold(`  ${title}`));
+      lines.push("");
+
       for (let i = 0; i < items.length; i++) {
         const it = items[i];
         const selected = i === idx;
@@ -582,14 +588,20 @@ async function interactiveModelSelect(agent: Agent, rl: readline.Interface): Pro
           const name = active
             ? chalk.cyan(`● ${it.id}`)
             : chalk.white(`○ ${it.id}`);
-          console.log(`  ${chalk.bgBlue.white("▶ ")}${name}  ${chalk.dim("—")} ${chalk.dim(it.label)}${detail}`);
+          lines.push(`  ${chalk.bgBlue.white("▶ ")}${name}  ${chalk.dim("—")} ${chalk.dim(it.label)}${detail}`);
         } else {
           const icon = active ? chalk.green("●") : chalk.dim("○");
           const name = active ? chalk.cyan(it.id) : chalk.dim(it.id);
-          console.log(`    ${icon} ${name}  ${chalk.dim("—")} ${chalk.dim(it.label)}${detail}`);
+          lines.push(`    ${icon} ${name}  ${chalk.dim("—")} ${chalk.dim(it.label)}${detail}`);
         }
       }
-      console.log(chalk.dim("\n  ↑↓ Navigate  |  Enter Confirm  |  Esc Cancel\n"));
+
+      lines.push("");
+      lines.push(chalk.dim("  ↑↓ Navigate  |  Enter Confirm  |  Esc Cancel"));
+      lines.push("");
+
+      drawnLines = lines.length;
+      process.stdout.write(lines.join("\n") + "\n");
     };
 
     render();
@@ -599,6 +611,7 @@ async function interactiveModelSelect(agent: Agent, rl: readline.Interface): Pro
         // Ctrl-C → cancel
         if (key.ctrl && _char === "c") {
           cleanup();
+          clearLines(drawnLines);
           console.log(chalk.dim("Cancelled.\n"));
           resolve(-1);
           return;
@@ -617,12 +630,12 @@ async function interactiveModelSelect(agent: Agent, rl: readline.Interface): Pro
           case "return":
           case "enter":
             cleanup();
-            clearLines(items.length + 3 + footerLines + 1);
+            clearLines(drawnLines);
             resolve(idx);
             break;
           case "escape":
             cleanup();
-            clearLines(items.length + 3 + footerLines + 1);
+            clearLines(drawnLines);
             console.log(chalk.dim("Cancelled.\n"));
             resolve(-1);
             break;
@@ -761,8 +774,9 @@ async function interactiveModelSelect(agent: Agent, rl: readline.Interface): Pro
     for (const listener of savedKeypressListeners) {
       process.stdin.on("keypress", listener as (...args: unknown[]) => void);
     }
+    // 恢复 raw mode（readline 终端模式需要 raw mode 做字符编辑和回显控制）
+    process.stdin.setRawMode?.(true);
     rl.resume();
-    rl.prompt(true);
   }
 }
 

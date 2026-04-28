@@ -18,7 +18,9 @@ export class ReadTool implements Tool {
   };
 
   async execute(input: Record<string, unknown>): Promise<string> {
-    const filePath = resolve(input.file_path as string);
+    const rawPath = input.file_path;
+    if (typeof rawPath !== "string" || !rawPath) return "Error: file_path is required";
+    const filePath = resolve(rawPath);
     try {
       return readFileSync(filePath, "utf-8");
     } catch (err) {

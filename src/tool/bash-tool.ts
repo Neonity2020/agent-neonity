@@ -23,7 +23,8 @@ export class BashTool implements Tool {
   constructor(private workingDirectory?: string) {}
 
   async execute(input: Record<string, unknown>): Promise<string> {
-    const command = input.command as string;
+    const command = input.command;
+    if (typeof command !== "string" || !command) return "Error: command is required";
     try {
       const result = execSync(command, {
         timeout: 30_000,

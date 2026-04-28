@@ -22,8 +22,11 @@ export class WriteTool implements Tool {
   };
 
   async execute(input: Record<string, unknown>): Promise<string> {
-    const filePath = resolve(input.file_path as string);
-    const content = input.content as string;
+    const rawPath = input.file_path;
+    const content = input.content;
+    if (typeof rawPath !== "string" || !rawPath) return "Error: file_path is required";
+    if (typeof content !== "string") return "Error: content is required";
+    const filePath = resolve(rawPath);
     try {
       mkdirSync(dirname(filePath), { recursive: true });
       writeFileSync(filePath, content, "utf-8");

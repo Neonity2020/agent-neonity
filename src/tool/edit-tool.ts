@@ -26,9 +26,13 @@ export class EditTool implements Tool {
   };
 
   async execute(input: Record<string, unknown>): Promise<string> {
-    const filePath = resolve(input.file_path as string);
-    const oldString = input.old_string as string;
-    const newString = input.new_string as string;
+    const rawPath = input.file_path;
+    const oldString = input.old_string;
+    const newString = input.new_string;
+    if (typeof rawPath !== "string" || !rawPath) return "Error: file_path is required";
+    if (typeof oldString !== "string") return "Error: old_string is required";
+    if (typeof newString !== "string") return "Error: new_string is required";
+    const filePath = resolve(rawPath);
 
     let content: string;
     try {
