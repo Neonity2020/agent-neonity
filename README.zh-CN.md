@@ -1,5 +1,7 @@
 # neonity
 
+[English](README.md)
+
 一个迷你 Claude Code 智能体框架 —— 运行在终端中的 AI 编程助手。
 
 **v0.1.0** · Node.js ≥ 20 · TypeScript
