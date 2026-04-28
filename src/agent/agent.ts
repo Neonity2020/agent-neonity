@@ -17,6 +17,7 @@ import {
   type TokenEstimate,
 } from "./context-manager.js";
 import { MemoryManager } from "../memory/memory.js";
+import { ProviderRouter } from "../provider/router.js";
 
 export class Agent {
   private history: Message[] = [];
@@ -76,9 +77,21 @@ export class Agent {
   }
 
   /** Switch to a different model. Returns true if successful. */
-  switchModel(model: string): boolean {
+  async switchModel(model: string): Promise<boolean> {
+    // Router mode: find which provider offers this model and switch to single-provider
+    if (this.provider instanceof ProviderRouter) {
+      const found = this.provider.findProviderForModel(model);
+      if (!found) return false;
+      return this.switchProvider(found.providerType, found.model);
+    }
+
+    // Single provider: validate then set
+    const available = this.getAvailableModels();
+    if (!available.some(m => m.id === model)) return false;
+
     if (this.provider.setModel) {
       this.provider.setModel(model);
+      this.config.provider.model = model;
       return true;
     }
     return false;
@@ -96,6 +109,11 @@ export class Agent {
   /** Get current provider name. */
   getProviderName(): string {
     return this.provider.name;
+  }
+
+  /** Check if router mode is active. */
+  isRouterMode(): boolean {
+    return this.provider instanceof ProviderRouter;
   }
 
   /** Switch to a different provider (type + optional model override). */
@@ -181,6 +199,8 @@ export class Agent {
       workingDirectory: this.workingDirectory,
       platform: process.platform,
       tools: allTools,
+      providerName: this.provider.name,
+      modelName: this.provider.model ?? undefined,
       skillPrompt: skillPrompt || undefined,
       memoryPrompt: memoryPrompt || undefined,
     });

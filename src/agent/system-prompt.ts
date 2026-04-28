@@ -4,6 +4,10 @@ export interface SystemPromptContext {
   workingDirectory: string;
   platform: string;
   tools: ToolDefinition[];
+  /** Current provider name (e.g. "anthropic", "openai", "router") */
+  providerName?: string;
+  /** Current model identifier (e.g. "claude-sonnet-4-20250514") */
+  modelName?: string;
   /** Optional prompt augmentation from active skills */
   skillPrompt?: string;
   /** Optional long-term memory to inject */
@@ -20,6 +24,7 @@ export function buildSystemPrompt(ctx: SystemPromptContext): string {
 ## Environment
 - Working directory: ${ctx.workingDirectory}
 - Platform: ${ctx.platform}
+- Provider: ${ctx.providerName ?? "unknown"}${ctx.modelName ? ` | Model: ${ctx.modelName}` : ""}
 
 ## Available Tools
 ${toolDescriptions}

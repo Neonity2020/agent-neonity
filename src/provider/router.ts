@@ -620,6 +620,32 @@ export class ProviderRouter implements Provider {
     return models;
   }
 
+  // ── Model Lookup ────────────────────────────────────────
+
+  /**
+   * Find which underlying provider offers a given model.
+   * Returns provider name (matches ProviderType) and the model ID,
+   * or null if no provider has this model.
+   */
+  findProviderForModel(modelId: string): { providerType: string; model: string } | null {
+    for (const [, entries] of this.config.providers) {
+      for (const entry of entries) {
+        // Check via listModels first
+        if (entry.provider.listModels) {
+          const models = entry.provider.listModels();
+          if (models.some(m => m.id === modelId)) {
+            return { providerType: entry.provider.name, model: modelId };
+          }
+        }
+        // Fallback: check current model
+        if (entry.provider.model === modelId) {
+          return { providerType: entry.provider.name, model: modelId };
+        }
+      }
+    }
+    return null;
+  }
+
   // ── Circuit Breaker Status ──────────────────────────────
 
   /** Get circuit breaker status for all providers. */
