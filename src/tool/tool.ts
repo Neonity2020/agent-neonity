@@ -11,6 +11,10 @@ export class ToolRegistry {
     return this.tools.get(name);
   }
 
+  remove(name: string): void {
+    this.tools.delete(name);
+  }
+
   getAll(): Tool[] {
     return [...this.tools.values()];
   }

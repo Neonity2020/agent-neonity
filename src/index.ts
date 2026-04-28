@@ -10,6 +10,7 @@ import { BashTool } from "./tool/bash-tool.js";
 import { ReadTool } from "./tool/read-tool.js";
 import { WriteTool } from "./tool/write-tool.js";
 import { EditTool } from "./tool/edit-tool.js";
+import { GitHubTool } from "./tool/github-tool.js";
 import { createWebSearchTool } from "./tool/index.js";
 import { buildSystemPrompt } from "./agent/system-prompt.js";
 import { startRepl } from "./cli/repl.js";
@@ -50,10 +51,16 @@ async function main() {
   toolRegistry.register(new ReadTool());
   toolRegistry.register(new WriteTool());
   toolRegistry.register(new EditTool());
+  toolRegistry.register(new GitHubTool());
 
   // Optional web search tool (configured via WEB_SEARCH_PROVIDER env var)
   const webSearchTool = createWebSearchTool();
   toolRegistry.register(webSearchTool);
+
+  // --- MCP Manager ---
+  const { McpManager } = await import("./mcp/manager.js");
+  const mcpManager = new McpManager(workingDirectory, toolRegistry);
+  await mcpManager.initialize();
 
   // --- Skill registry ---
   const skillRegistry = new SkillRegistry();
@@ -121,7 +128,7 @@ async function main() {
   );
   console.log("Type /help to see commands, /skills to list skills.\n");
 
-  await startRepl(agent);
+  await startRepl(agent, mcpManager);
 }
 
 main().catch(console.error);

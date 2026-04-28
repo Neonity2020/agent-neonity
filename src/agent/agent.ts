@@ -18,6 +18,9 @@ import {
 } from "./context-manager.js";
 import { MemoryManager } from "../memory/memory.js";
 import { ProviderRouter } from "../provider/router.js";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as os from "node:os";
 
 export class Agent {
   private history: Message[] = [];
@@ -194,6 +197,24 @@ export class Agent {
     );
     const skillPrompt = this.skillRegistry.getActivePrompt();
     const memoryPrompt = this.memoryManager?.getForSystemPrompt() || "";
+    
+    let soulPrompt = "";
+    try {
+      const pathsToCheck = [
+        path.join(this.workingDirectory, "SOUL.md"),
+        path.join(this.workingDirectory, ".neonity", "SOUL.md"),
+        path.join(os.homedir(), ".neonity", "SOUL.md")
+      ];
+      
+      for (const p of pathsToCheck) {
+        if (fs.existsSync(p)) {
+          soulPrompt = fs.readFileSync(p, "utf-8");
+          break; // Use the first one found (prioritize local over global)
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to read SOUL.md:", err);
+    }
 
     return buildSystemPrompt({
       workingDirectory: this.workingDirectory,
@@ -203,6 +224,7 @@ export class Agent {
       modelName: this.provider.model ?? undefined,
       skillPrompt: skillPrompt || undefined,
       memoryPrompt: memoryPrompt || undefined,
+      soulPrompt: soulPrompt || undefined,
     });
   }
 

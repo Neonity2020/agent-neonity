@@ -12,6 +12,8 @@ export interface SystemPromptContext {
   skillPrompt?: string;
   /** Optional long-term memory to inject */
   memoryPrompt?: string;
+  /** Optional personality/instructions from SOUL.md */
+  soulPrompt?: string;
 }
 
 export function buildSystemPrompt(ctx: SystemPromptContext): string {
@@ -30,6 +32,7 @@ export function buildSystemPrompt(ctx: SystemPromptContext): string {
 ${toolDescriptions}
 ${ctx.skillPrompt ? `\n${ctx.skillPrompt}\n` : ""}
 ${ctx.memoryPrompt ? `\n${ctx.memoryPrompt}\n` : ""}
+${ctx.soulPrompt ? `\n## Agent Personality & Custom Instructions\n${ctx.soulPrompt}\n` : ""}
 ## Instructions
 - Use tools to accomplish tasks. Show your reasoning in text before taking actions.
 - Be direct and concise. Avoid unnecessary preamble.

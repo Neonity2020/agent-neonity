@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import chalk from "chalk";
 import type { Agent } from "../agent/agent.js";
+import type { McpManager } from "../mcp/manager.js";
 import { ProviderRouter } from "../provider/router.js";
 import { createStreamCallbacks } from "./stream.js";
 import {
@@ -32,9 +33,10 @@ const SLASH_COMMANDS = [
   "/router-reset",
   "/cost",
   "/context",
+  "/mcp",
 ];
 
-export async function startRepl(agent: Agent): Promise<void> {
+export async function startRepl(agent: Agent, mcpManager?: McpManager): Promise<void> {
   const historyLines = loadHistory();
 
   const rl = readline.createInterface({
@@ -51,6 +53,20 @@ export async function startRepl(agent: Agent): Promise<void> {
     saveHistory(history);
   });
 
+  const autosaveMessages = loadSession("autosave");
+  if (autosaveMessages && autosaveMessages.length > 0) {
+    const answer = await new Promise<string>((resolve) => {
+      rl.question(chalk.yellow("? Found an auto-saved session from your last run. Resume? [Y/n] "), resolve);
+    });
+    if (answer.trim().toLowerCase() !== "n") {
+      agent.loadHistory(autosaveMessages);
+      console.log(chalk.dim(`✓ Resumed session (${autosaveMessages.length} messages).\n`));
+    } else {
+      deleteSession("autosave");
+      console.log(chalk.dim(`✓ Started a new session.\n`));
+    }
+  }
+
   rl.prompt();
 
   rl.on("line", async (line) => {
@@ -62,8 +78,9 @@ export async function startRepl(agent: Agent): Promise<void> {
 
     // Handle slash commands
     if (input.startsWith("/")) {
-      const handled = await handleCommand(input, agent, rl);
+      const handled = await handleCommand(input, agent, rl, mcpManager);
       if (handled) {
+        saveSession("autosave", agent.getHistory());
         rl.prompt();
         return;
       }
@@ -77,6 +94,8 @@ export async function startRepl(agent: Agent): Promise<void> {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       process.stderr.write(chalk.red(`\nError: ${message}\n`));
+    } finally {
+      saveSession("autosave", agent.getHistory());
     }
 
     process.stdout.write("\n");
@@ -95,7 +114,8 @@ export async function startRepl(agent: Agent): Promise<void> {
 async function handleCommand(
   input: string,
   agent: Agent,
-  rl: readline.Interface
+  rl: readline.Interface,
+  mcpManager?: McpManager
 ): Promise<boolean> {
   const parts = input.split(/\s+/);
   const cmd = parts[0].toLowerCase();
@@ -328,6 +348,41 @@ async function handleCommand(
       return true;
     }
 
+    case "/mcp": {
+      if (!mcpManager) {
+        console.log(chalk.dim("MCP manager is not initialized."));
+        return true;
+      }
+
+      if (arg === "reload") {
+        console.log(chalk.dim("Reloading MCP servers..."));
+        await mcpManager.reload();
+        console.log(chalk.green("✓ MCP servers reloaded."));
+      }
+
+      const statuses = mcpManager.getStatuses();
+      if (statuses.length === 0) {
+        console.log(chalk.dim("No MCP servers configured (or config missing/empty)."));
+        console.log(chalk.dim("Add an mcp_servers.json file to your .neonity/ folder."));
+        return true;
+      }
+
+      console.log(chalk.bold("\nMCP Servers:"));
+      for (const s of statuses) {
+        let icon = chalk.yellow("○");
+        let statusStr: string = s.status;
+        if (s.status === "connected") {
+          icon = chalk.green("●");
+        } else if (s.status === "failed") {
+          icon = chalk.red("✗");
+          statusStr = `${s.status} (${s.error})`;
+        }
+        console.log(`  ${icon} ${chalk.cyan(s.name)} [${statusStr}] — ${s.toolsCount} tools`);
+      }
+      console.log(chalk.dim("\nUse /mcp reload to reconnect to MCP servers.\n"));
+      return true;
+    }
+
     case "/model": {
       // 无参数 → 统一交互菜单
       if (!arg) {
@@ -528,6 +583,7 @@ function printHelp(): void {
       chalk.dim("  /router-reset   Reset circuit breakers (optional: <name>)\n") +
       chalk.dim("  /cost           Show cumulative token usage & cost\n") +
       chalk.dim("  /context        Show context window usage\n") +
+      chalk.dim("  /mcp            Show MCP server status and loaded tools\n") +
       "\n" +
       chalk.dim("Anything else is sent to the AI agent.\n")
   );
