@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
-import { useTranslation } from "@/lib/i18n"
 import { KanbanColumn } from "./kanban-column"
 import { TaskDialog } from "./task-dialog"
+import { AIPanel } from "@/components/ai/ai-panel"
 import { Button } from "@/components/ui/button"
 import { Column, Task } from "@/types/kanban"
 import { Plus, RefreshCw } from "lucide-react"
@@ -29,27 +29,24 @@ export function KanbanBoard({ boardId }: KanbanBoardProps) {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [selectedColumnId, setSelectedColumnId] = useState<string>("")
   const [error, setError] = useState<string | null>(null)
+  const [refreshKey, setRefreshKey] = useState(0)
   
   const supabase = createClient()
-  const { t } = useTranslation()
 
   const fetchData = useCallback(async () => {
-    // Skip if Supabase is not configured
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-      setError(t.kanban.configErrorDetail)
+      setError("Please configure Supabase environment variables")
       setLoading(false)
       return
     }
 
     try {
-      // Fetch columns
       const { data: columnsData } = await supabase
         .from("columns")
         .select("*")
         .eq("board_id", boardId)
         .order("order", { ascending: true })
 
-      // Fetch tasks
       const { data: tasksData } = await supabase
         .from("tasks")
         .select("*")
@@ -59,24 +56,18 @@ export function KanbanBoard({ boardId }: KanbanBoardProps) {
       if (columnsData) setColumns(columnsData)
       if (tasksData) setTasks(tasksData)
 
-      // If no columns exist, initialize with defaults
       if (!columnsData || columnsData.length === 0) {
         await initializeColumns()
       }
     } catch (err) {
       console.error("Error fetching data:", err)
-      setError(t.kanban.configErrorHint)
+      setError("Failed to connect to Supabase. Please check your configuration.")
     } finally {
       setLoading(false)
     }
   }, [])
 
   const initializeColumns = async () => {
-    const defaultColumnsWithIds = DEFAULT_COLUMNS.map((col, index) => ({
-      ...col,
-      id: `default-${index}`,
-    }))
-
     const { data: insertedColumns } = await supabase
       .from("columns")
       .insert(DEFAULT_COLUMNS.map((col, index) => ({
@@ -93,7 +84,7 @@ export function KanbanBoard({ boardId }: KanbanBoardProps) {
 
   useEffect(() => {
     fetchData()
-  }, [fetchData])
+  }, [fetchData, refreshKey])
 
   const handleAddTask = (columnId: string) => {
     setSelectedTask(null)
@@ -110,7 +101,6 @@ export function KanbanBoard({ boardId }: KanbanBoardProps) {
   const handleSaveTask = async (data: { title: string; description: string; column_id: string }) => {
     try {
       if (selectedTask) {
-        // Update existing task
         const { data: updated } = await supabase
           .from("tasks")
           .update({
@@ -127,7 +117,6 @@ export function KanbanBoard({ boardId }: KanbanBoardProps) {
           setTasks(tasks.map(t => t.id === updated.id ? updated : t))
         }
       } else {
-        // Create new task
         const maxOrder = tasks
           .filter(t => t.column_id === data.column_id)
           .reduce((max, t) => Math.max(max, t.order), -1)
@@ -170,31 +159,6 @@ export function KanbanBoard({ boardId }: KanbanBoardProps) {
     }
   }
 
-  const handleMoveTask = async (taskId: string, newColumnId: string) => {
-    try {
-      const maxOrder = tasks
-        .filter(t => t.column_id === newColumnId)
-        .reduce((max, t) => Math.max(max, t.order), -1)
-
-      const { data: updated } = await supabase
-        .from("tasks")
-        .update({
-          column_id: newColumnId,
-          order: maxOrder + 1,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", taskId)
-        .select()
-        .single()
-
-      if (updated) {
-        setTasks(tasks.map(t => t.id === updated.id ? updated : t))
-      }
-    } catch (error) {
-      console.error("Error moving task:", error)
-    }
-  }
-
   const onDragEnd = async (result: DropResult) => {
     const { destination, source, draggableId } = result
 
@@ -210,7 +174,6 @@ export function KanbanBoard({ boardId }: KanbanBoardProps) {
     const task = tasks.find(t => t.id === draggableId)
     if (!task) return
 
-    // Optimistically update UI
     const newTasks = [...tasks]
     
     const sourceTasks = newTasks.filter(t => t.column_id === source.droppableId).sort((a, b) => a.order - b.order)
@@ -261,7 +224,7 @@ export function KanbanBoard({ boardId }: KanbanBoardProps) {
       }
     } catch (error) {
       console.error("Error updating tasks order:", error)
-      fetchData() // revert on error
+      fetchData()
     }
   }
 
@@ -277,42 +240,51 @@ export function KanbanBoard({ boardId }: KanbanBoardProps) {
     return (
       <div className="flex flex-1 items-center justify-center flex-col gap-4 p-8 text-center">
         <div className="rounded-lg bg-destructive/10 p-4 text-destructive">
-          <p className="font-medium">{t.kanban.configError}</p>
+          <p className="font-medium">Configuration Error</p>
           <p className="text-sm mt-1">{error}</p>
         </div>
         <p className="text-sm text-muted-foreground">
-          {t.kanban.configErrorHint}
+          Please make sure you have set up your Supabase project and configured the environment variables.
         </p>
       </div>
     )
   }
 
   return (
-    <div className="flex-1 overflow-x-auto">
-      <div className="w-fit mx-auto h-full">
-      <DragDropContext onDragEnd={onDragEnd}>
-        <div className="flex gap-4 p-4 h-full">
-        {columns.map((column) => (
-          <KanbanColumn
-            key={column.id}
-            column={column}
-            tasks={tasks.filter((t) => t.column_id === column.id).sort((a, b) => a.order - b.order)}
-            onAddTask={() => handleAddTask(column.id)}
-            onEditTask={handleEditTask}
-          />
-        ))}
-        
-        {columns.length === 0 && (
-          <div className="flex flex-col items-center justify-center flex-1 text-muted-foreground">
-            <p className="text-lg mb-4">{t.kanban.noColumnsYet}</p>
-            <Button onClick={initializeColumns}>
-              <Plus className="h-4 w-4 mr-2" />
-              {t.kanban.initializeBoard}
-            </Button>
-          </div>
-        )}
+    <div className="flex flex-col flex-1 overflow-hidden">
+      <div className="flex justify-end p-4 border-b bg-muted/20">
+        <AIPanel 
+          boardId={boardId} 
+          columns={columns} 
+          onTasksCreated={() => setRefreshKey(k => k + 1)}
+        />
+      </div>
+      <div className="flex-1 overflow-x-auto">
+        <div className="w-fit mx-auto h-full">
+          <DragDropContext onDragEnd={onDragEnd}>
+            <div className="flex gap-4 p-4 h-full">
+              {columns.map((column) => (
+                <KanbanColumn
+                  key={column.id}
+                  column={column}
+                  tasks={tasks.filter((t) => t.column_id === column.id).sort((a, b) => a.order - b.order)}
+                  onAddTask={() => handleAddTask(column.id)}
+                  onEditTask={handleEditTask}
+                />
+              ))}
+              
+              {columns.length === 0 && (
+                <div className="flex flex-col items-center justify-center flex-1 text-muted-foreground">
+                  <p className="text-lg mb-4">No columns yet</p>
+                  <Button onClick={initializeColumns}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Initialize Board
+                  </Button>
+                </div>
+              )}
+            </div>
+          </DragDropContext>
         </div>
-      </DragDropContext>
       </div>
 
       <TaskDialog

@@ -58,6 +58,8 @@ Open [http://localhost:3000](http://localhost:3000) to view the application.
 - **Persistent Storage**: All data stored in Supabase
 - **Responsive Design**: Works on desktop and mobile
 - **Dark Mode**: Supports system dark mode
+- **User Authentication**: Sign up/login with email, Google OAuth, or magic link
+- **AI Project Planner**: Describe your goal and AI suggests tasks to add to your board
 
 ## Project Structure
 

@@ -23,21 +23,31 @@ const DialogContext = React.createContext<{
   onOpenChange?: (open: boolean) => void
 }>({ open: false })
 
-const DialogTrigger = React.forwardRef<
-  HTMLButtonElement,
-  React.ButtonHTMLAttributes<HTMLButtonElement> & { children?: React.ReactNode }
->(({ children, ...props }, ref) => {
-  const { onOpenChange } = React.useContext(DialogContext)
-  return (
-    <button
-      ref={ref}
-      onClick={() => onOpenChange?.(true)}
-      {...props}
-    >
-      {children}
-    </button>
-  )
-})
+interface DialogTriggerProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  asChild?: boolean
+}
+
+const DialogTrigger = React.forwardRef<HTMLButtonElement, DialogTriggerProps>(
+  ({ children, asChild, ...props }, ref) => {
+    const { onOpenChange } = React.useContext(DialogContext)
+    
+    if (asChild && React.isValidElement(children)) {
+      return React.cloneElement(children as React.ReactElement<{ onClick?: () => void }>, {
+        onClick: () => onOpenChange?.(true),
+      })
+    }
+    
+    return (
+      <button
+        ref={ref}
+        onClick={() => onOpenChange?.(true)}
+        {...props}
+      >
+        {children}
+      </button>
+    )
+  }
+)
 DialogTrigger.displayName = "DialogTrigger"
 
 import { createPortal } from "react-dom"

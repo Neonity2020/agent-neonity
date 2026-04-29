@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useTranslation } from "@/lib/i18n"
 import {
   Dialog,
   DialogContent,
@@ -37,7 +36,6 @@ export function TaskDialog({
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [columnId, setColumnId] = useState("")
-  const { t } = useTranslation()
 
   useEffect(() => {
     if (task) {
@@ -61,34 +59,34 @@ export function TaskDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{task ? t.taskDialog.editTask : t.taskDialog.createNewTask}</DialogTitle>
+          <DialogTitle>{task ? "Edit Task" : "Create New Task"}</DialogTitle>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="title">{t.taskDialog.title}</Label>
+            <Label htmlFor="title">Title</Label>
             <Input
               id="title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder={t.taskDialog.titlePlaceholder}
+              placeholder="Task title"
               autoFocus
             />
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="description">{t.taskDialog.description}</Label>
+            <Label htmlFor="description">Description</Label>
             <Textarea
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder={t.taskDialog.descriptionPlaceholder}
+              placeholder="Task description (optional)"
               rows={3}
             />
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="column">{t.taskDialog.column}</Label>
+            <Label htmlFor="column">Column</Label>
             <select
               id="column"
               value={columnId}
@@ -97,11 +95,7 @@ export function TaskDialog({
             >
               {columns.map((col) => (
                 <option key={col.id} value={col.id}>
-                  {col.name === "Backlog" ? t.columnNames.backlog :
-                   col.name === "To Do" ? t.columnNames.todo :
-                   col.name === "In Progress" ? t.columnNames.inProgress :
-                   col.name === "Done" ? t.columnNames.done :
-                   col.name}
+                  {col.name}
                 </option>
               ))}
             </select>
@@ -118,10 +112,10 @@ export function TaskDialog({
               </Button>
             )}
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              {t.taskDialog.cancel}
+              Cancel
             </Button>
             <Button type="submit" disabled={!title.trim()}>
-              {task ? t.taskDialog.saveChanges : t.taskDialog.createTask}
+              {task ? "Save Changes" : "Create Task"}
             </Button>
           </DialogFooter>
         </form>
