@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",
+    "@radix-ui/react-alert-dialog": "^1.1.15",
+    "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.105.0",
     "class-variance-authority": "^0.7.1",

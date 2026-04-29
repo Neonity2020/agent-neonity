@@ -1,6 +1,7 @@
 "use client"
 
 import { Column, Task } from "@/types/kanban"
+import { useTranslation } from "@/lib/i18n"
 import { TaskCard } from "./task-card"
 import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
@@ -15,6 +16,7 @@ interface KanbanColumnProps {
 }
 
 export function KanbanColumn({ column, tasks, onAddTask, onEditTask }: KanbanColumnProps) {
+  const { t } = useTranslation()
   return (
     <div className="flex flex-col w-72 shrink-0">
       <div className="flex items-center justify-between mb-3 px-1">
@@ -23,7 +25,13 @@ export function KanbanColumn({ column, tasks, onAddTask, onEditTask }: KanbanCol
             className="w-3 h-3 rounded-full"
             style={{ backgroundColor: column.color }}
           />
-          <h3 className="font-semibold text-sm">{column.name}</h3>
+          <h3 className="font-semibold text-sm">
+            {column.name === "Backlog" ? t.columnNames.backlog :
+             column.name === "To Do" ? t.columnNames.todo :
+             column.name === "In Progress" ? t.columnNames.inProgress :
+             column.name === "Done" ? t.columnNames.done :
+             column.name}
+          </h3>
           <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
             {tasks.length}
           </span>
@@ -55,10 +63,10 @@ export function KanbanColumn({ column, tasks, onAddTask, onEditTask }: KanbanCol
         
         {tasks.length === 0 && (
           <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
-            <p className="text-sm">No tasks</p>
+            <p className="text-sm">{t.column.noTasks}</p>
             <Button variant="ghost" size="sm" className="mt-2" onClick={onAddTask}>
               <Plus className="h-4 w-4 mr-1" />
-              Add task
+              {t.column.addTask}
             </Button>
           </div>
         )}

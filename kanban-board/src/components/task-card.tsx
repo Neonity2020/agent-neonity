@@ -3,6 +3,7 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Task } from "@/types/kanban"
+import { useTranslation } from "@/lib/i18n"
 import { GripVertical } from "lucide-react"
 import { Draggable } from "@hello-pangea/dnd"
 
@@ -13,6 +14,8 @@ interface TaskCardProps {
 }
 
 export function TaskCard({ task, index, onClick }: TaskCardProps) {
+  const { locale } = useTranslation()
+
   return (
     <Draggable draggableId={task.id} index={index}>
       {(provided) => (
@@ -37,7 +40,7 @@ export function TaskCard({ task, index, onClick }: TaskCardProps) {
               </p>
             )}
             <Badge variant="secondary" className="mt-2 text-xs">
-              {new Date(task.created_at).toLocaleDateString()}
+              {new Date(task.created_at).toLocaleDateString(locale === "zh-CN" ? "zh-CN" : "en-US")}
             </Badge>
           </div>
         </div>
@@ -48,3 +51,4 @@ export function TaskCard({ task, index, onClick }: TaskCardProps) {
     </Draggable>
   )
 }
+

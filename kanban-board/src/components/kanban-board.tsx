@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { useTranslation } from "@/lib/i18n"
 import { KanbanColumn } from "./kanban-column"
 import { TaskDialog } from "./task-dialog"
 import { Button } from "@/components/ui/button"
@@ -30,11 +31,12 @@ export function KanbanBoard({ boardId }: KanbanBoardProps) {
   const [error, setError] = useState<string | null>(null)
   
   const supabase = createClient()
+  const { t } = useTranslation()
 
   const fetchData = useCallback(async () => {
     // Skip if Supabase is not configured
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-      setError('Please configure Supabase environment variables')
+      setError(t.kanban.configErrorDetail)
       setLoading(false)
       return
     }
@@ -63,7 +65,7 @@ export function KanbanBoard({ boardId }: KanbanBoardProps) {
       }
     } catch (err) {
       console.error("Error fetching data:", err)
-      setError('Failed to connect to Supabase. Please check your configuration.')
+      setError(t.kanban.configErrorHint)
     } finally {
       setLoading(false)
     }
@@ -275,11 +277,11 @@ export function KanbanBoard({ boardId }: KanbanBoardProps) {
     return (
       <div className="flex flex-1 items-center justify-center flex-col gap-4 p-8 text-center">
         <div className="rounded-lg bg-destructive/10 p-4 text-destructive">
-          <p className="font-medium">Configuration Error</p>
+          <p className="font-medium">{t.kanban.configError}</p>
           <p className="text-sm mt-1">{error}</p>
         </div>
         <p className="text-sm text-muted-foreground">
-          Please make sure you have set up your Supabase project and configured the environment variables.
+          {t.kanban.configErrorHint}
         </p>
       </div>
     )
@@ -302,10 +304,10 @@ export function KanbanBoard({ boardId }: KanbanBoardProps) {
         
         {columns.length === 0 && (
           <div className="flex flex-col items-center justify-center flex-1 text-muted-foreground">
-            <p className="text-lg mb-4">No columns yet</p>
+            <p className="text-lg mb-4">{t.kanban.noColumnsYet}</p>
             <Button onClick={initializeColumns}>
               <Plus className="h-4 w-4 mr-2" />
-              Initialize Board
+              {t.kanban.initializeBoard}
             </Button>
           </div>
         )}

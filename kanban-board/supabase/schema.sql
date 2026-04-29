@@ -1,99 +1,166 @@
--- Kanban Board Database Schema for Supabase
+-- =====================================================
+-- Kanban Board Schema (No Members)
+-- =====================================================
 
--- Enable UUID extension
 create extension if not exists "uuid-ossp";
 
--- Create columns table
-create table if not exists columns (
+-- =====================================================
+-- Tables
+-- =====================================================
+
+create table profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  email text not null,
+  full_name text,
+  avatar_url text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table boards (
   id uuid primary key default uuid_generate_v4(),
+  name text not null,
+  description text,
+  owner_id uuid not null references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table columns (
+  id uuid primary key default uuid_generate_v4(),
+  board_id uuid not null references boards(id) on delete cascade,
   name text not null,
   color text not null default '#6b7280',
   "order" integer not null default 0,
   created_at timestamptz not null default now()
 );
 
--- Create tasks table
-create table if not exists tasks (
+create table tasks (
   id uuid primary key default uuid_generate_v4(),
+  board_id uuid not null references boards(id) on delete cascade,
+  column_id uuid not null references columns(id) on delete cascade,
   title text not null,
   description text,
-  column_id uuid not null references columns(id) on delete cascade,
   "order" integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
--- Create indexes for better query performance
-create index if not exists idx_tasks_column_id on tasks(column_id);
-create index if not exists idx_tasks_order on tasks(column_id, "order");
-create index if not exists idx_columns_order on columns("order");
+-- =====================================================
+-- Indexes
+-- =====================================================
+create index idx_boards_owner on boards(owner_id);
+create index idx_columns_board on columns(board_id);
+create index idx_tasks_board on tasks(board_id);
+create index idx_tasks_column on tasks(column_id);
 
--- Enable Row Level Security (RLS)
+-- =====================================================
+-- RLS Helper Function
+-- =====================================================
+create or replace function public.is_board_owner(board_uuid uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.boards
+    where id = board_uuid and owner_id = auth.uid()
+  );
+$$;
+
+-- =====================================================
+-- Enable RLS
+-- =====================================================
+alter table profiles enable row level security;
+alter table boards enable row level security;
 alter table columns enable row level security;
 alter table tasks enable row level security;
 
--- Create policies for public access (for development)
--- In production, you should modify these to use proper authentication
-create policy "Allow public read access to columns"
-  on columns for select
-  to public
-  using (true);
+-- =====================================================
+-- RLS Policies
+-- =====================================================
 
-create policy "Allow public insert access to columns"
-  on columns for insert
-  to public
-  with check (true);
+-- PROFILES
+create policy "p_sel" on profiles for select to authenticated using (true);
+create policy "p_ins" on profiles for insert to authenticated with check (auth.uid() = id);
+create policy "p_upd" on profiles for update to authenticated using (auth.uid() = id);
 
-create policy "Allow public update access to columns"
-  on columns for update
-  to public
-  using (true);
+-- BOARDS (simple owner-based access)
+create policy "b_sel" on boards for select to authenticated
+  using (owner_id = auth.uid());
+create policy "b_ins" on boards for insert to authenticated
+  with check (owner_id = auth.uid());
+create policy "b_upd" on boards for update to authenticated
+  using (owner_id = auth.uid());
+create policy "b_del" on boards for delete to authenticated
+  using (owner_id = auth.uid());
 
-create policy "Allow public delete access to columns"
-  on columns for delete
-  to public
-  using (true);
+-- COLUMNS (owner of the board)
+create policy "c_sel" on columns for select to authenticated
+  using (public.is_board_owner(board_id));
+create policy "c_ins" on columns for insert to authenticated
+  with check (public.is_board_owner(board_id));
+create policy "c_upd" on columns for update to authenticated
+  using (public.is_board_owner(board_id));
+create policy "c_del" on columns for delete to authenticated
+  using (public.is_board_owner(board_id));
 
-create policy "Allow public read access to tasks"
-  on tasks for select
-  to public
-  using (true);
+-- TASKS (owner of the board)
+create policy "t_sel" on tasks for select to authenticated
+  using (public.is_board_owner(board_id));
+create policy "t_ins" on tasks for insert to authenticated
+  with check (public.is_board_owner(board_id));
+create policy "t_upd" on tasks for update to authenticated
+  using (public.is_board_owner(board_id));
+create policy "t_del" on tasks for delete to authenticated
+  using (public.is_board_owner(board_id));
 
-create policy "Allow public insert access to tasks"
-  on tasks for insert
-  to public
-  with check (true);
+-- =====================================================
+-- Functions & Triggers
+-- =====================================================
 
-create policy "Allow public update access to tasks"
-  on tasks for update
-  to public
-  using (true);
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (id, email, full_name, avatar_url)
+  values (
+    new.id,
+    new.email,
+    new.raw_user_meta_data->>'full_name',
+    new.raw_user_meta_data->>'avatar_url'
+  );
+  return new;
+end;
+$$;
 
-create policy "Allow public delete access to tasks"
-  on tasks for delete
-  to public
-  using (true);
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
 
--- Create function to automatically update updated_at timestamp
-create or replace function update_updated_at_column()
-returns trigger as $$
+create or replace function public.update_updated_at_column()
+returns trigger
+language plpgsql
+as $$
 begin
   new.updated_at = now();
   return new;
 end;
-$$ language 'plpgsql';
+$$;
 
--- Create trigger for tasks updated_at
-drop trigger if exists update_tasks_updated_at on tasks;
+create trigger update_boards_updated_at
+  before update on boards
+  for each row execute function public.update_updated_at_column();
+
 create trigger update_tasks_updated_at
   before update on tasks
-  for each row
-  execute function update_updated_at_column();
+  for each row execute function public.update_updated_at_column();
 
--- Insert default columns
-insert into columns (name, color, "order") values
-  ('Backlog', '#6b7280', 0),
-  ('To Do', '#3b82f6', 1),
-  ('In Progress', '#f59e0b', 2),
-  ('Done', '#22c55e', 3)
-on conflict do nothing;
+create trigger update_profiles_updated_at
+  before update on profiles
+  for each row execute function public.update_updated_at_column();
